@@ -1,5 +1,7 @@
 import { resolveConfig } from '../config.js'
 import { style } from './style.js'
+import { createActivitySource, processingLabel } from './activity.js'
+import { syncNativeWhale } from './whale.js'
 
 const geometryKey = 'dsh.full-view.geometry.v1'
 const pendingSelector = '[data-approval-key], [data-question-key], [data-plan-review-key]'
@@ -23,7 +25,7 @@ function findSurface(doc) {
 }
 
 /** Install one reversible DOM presentation effect over the existing host components. */
-export function installFullView(doc, input = {}) {
+export function installFullView(doc, input = {}, activity = null) {
   const config = resolveConfig(input)
   const win = doc.defaultView
   if (!win) throw new Error('dsh-full-view: no browser document')
@@ -37,8 +39,8 @@ export function installFullView(doc, input = {}) {
   let resize = null
   let handles = []
   let badge = null
-  let update = null
-  let unread = false
+  let processing = null
+  let clock = null
   let approvalState = null
   let savedAccessibility = null
   let sessionId = null
@@ -128,16 +130,9 @@ export function installFullView(doc, input = {}) {
     setStyle(surface.frame, '--dsh-fv-content-width', `${b.width}px`)
     for (const key of ['x', 'y', 'width', 'height']) setStyle(surface.chat, `--dsh-fv-${key}`, `${g[key]}px`)
     // Recovery controls live beside, rather than inside, the inert hidden chat.
-    badge.hidden = mode !== 'hidden'
-    const badgeText = unread ? '聊天 · 有新内容' : '打开聊天'
-    if (badge.textContent !== badgeText) badge.textContent = badgeText
-    badge.setAttribute('aria-label', unread ? '恢复聊天，有新内容' : '恢复聊天')
-    setStyle(badge, 'left', `${g.x + Math.max(0, g.width - 120)}px`)
-    setStyle(badge, 'top', `${g.y + Math.max(0, g.visibleHeight - 36)}px`)
-    setStyle(badge, 'max-width', `${g.width}px`)
-    update.hidden = !unread || mode !== 'compact'
-    setStyle(update, 'left', `${g.x}px`)
-    setStyle(update, 'top', `${Math.max(b.top, g.y - 32)}px`)
+    if (badge.hidden !== (mode !== 'hidden')) badge.hidden = mode !== 'hidden'
+    setStyle(badge, 'left', `${g.x + Math.max(0, g.width - 40)}px`)
+    setStyle(badge, 'top', `${g.y + Math.max(0, g.visibleHeight - 40)}px`)
     for (const handle of handles) {
       const vertical = ['n', 's'].includes(handle.getAttribute('data-dsh-resize-direction'))
       handle.setAttribute('aria-valuemin', '0')
@@ -154,7 +149,6 @@ export function installFullView(doc, input = {}) {
     }
     title.title = title.textContent
     edge.title = approvalState ? '请先处理会话中的待办提示' : `点击外缘${minimized ? '展开' : '收起'}聊天，拖动移动`
-    surface.chat.toggleAttribute('data-dsh-chat-unread', unread)
   }
   const setMode = (next, { focus = false, force = false } = {}) => {
     if (!surface || (approvalState && next !== 'expanded' && !force)) return
@@ -174,7 +168,6 @@ export function installFullView(doc, input = {}) {
         else surface.chat.setAttribute(key, value)
       }
     }
-    if (mode === 'expanded') unread = false
     updateGeometry()
     if (mode === 'hidden') badge.focus({ preventScroll: true })
     else if (focus || (mode === 'compact' && withinChat(active) && !composer?.seat.contains(active))) focusEditor()
@@ -334,9 +327,18 @@ export function installFullView(doc, input = {}) {
       setMode('compact', { focus: true })
     })
     badge.addEventListener('keydown', moveWithKeyboard)
-    update = button('有新内容，展开聊天查看', 'data-dsh-show-update', null, () => setMode('expanded', { focus: true }))
-    update.textContent = '有新内容 · 查看'
-    update.setAttribute('aria-live', 'polite')
+    badge.removeAttribute('title')
+    const whale = doc.createElement('span')
+    whale.setAttribute('data-dsh-whale-icon', '')
+    whale.setAttribute('aria-hidden', 'true')
+    badge.append(whale)
+    syncNativeWhale(doc, badge)
+    processing = doc.createElement('div')
+    processing.setAttribute('data-dsh-processing-status', '')
+    processing.setAttribute('role', 'status')
+    // Do not announce each second to assistive technology.
+    processing.setAttribute('aria-live', 'off')
+    processing.hidden = true
     for (const element of [toolbar, edge, ...handles, badge, grip]) {
       element.addEventListener('pointerdown', pointerDown)
       element.addEventListener('pointermove', pointerMove)
@@ -368,6 +370,8 @@ export function installFullView(doc, input = {}) {
   }
   const clearComposer = () => {
     clearModel()
+    processing?.remove()
+    composer?.card.removeAttribute('data-dsh-processing')
     if (composer) resizeObserver?.unobserve?.(composer.seat)
     for (const [element, marker] of composerMarks) element.removeAttribute(marker)
     composerMarks = []
@@ -380,10 +384,10 @@ export function installFullView(doc, input = {}) {
     const scroll = card?.querySelector('[data-input-scroll]')
     const row = scroll?.nextElementSibling
     const footer = card?.nextElementSibling
-    if (composer?.seat === seat && composer?.card === card && composer?.row === row && composer?.footer === footer && composer?.tools === row?.firstElementChild && composer?.trailing === row?.lastElementChild) { syncModel(); return }
+    if (composer?.seat === seat && composer?.card === card && composer?.scroll === scroll && composer?.row === row && composer?.footer === footer && composer?.tools === row?.firstElementChild && composer?.trailing === row?.lastElementChild) { syncModel(); return }
     clearComposer()
     if (!seat || !card || !scroll || !row) return
-    composer = { seat, card, row, footer, tools: row.firstElementChild, trailing: row.lastElementChild }
+    composer = { seat, card, scroll, row, footer, tools: row.firstElementChild, trailing: row.lastElementChild }
     const mark = (element, marker) => {
       if (!element) return
       element.setAttribute(marker, '')
@@ -400,11 +404,37 @@ export function installFullView(doc, input = {}) {
     syncModel()
     resizeObserver?.observe(seat)
   }
+  const stopClock = () => {
+    if (clock !== null) win.clearInterval(clock)
+    clock = null
+  }
+  const syncActivity = () => {
+    if (!surface) return
+    activity?.setSession(sessionId)
+    syncNativeWhale(doc, badge)
+    const state = activity?.getSnapshot() ?? { running: false }
+    const running = state.running && !state.pending && !approvalState
+    badge.toggleAttribute('data-dsh-running', running)
+    badge.setAttribute('aria-label', running ? '恢复聊天，正在处理' : '恢复聊天')
+    const input = editor()
+    const hasDraft = !!(input?.matches('textarea') ? input.value : input?.textContent)?.trim()
+    const hidden = !running || !composer || hasDraft
+    composer?.card.toggleAttribute('data-dsh-processing', !hidden)
+    if (processing.hidden !== hidden) processing.hidden = hidden
+    const label = processingLabel(state.startedAt, Date.now())
+    if (processing.textContent !== label) processing.textContent = label
+    if (composer && processing.parentElement !== composer.scroll) composer.scroll.append(processing)
+    if (running && Number.isFinite(state.startedAt)) {
+      if (clock === null) clock = win.setInterval(syncActivity, 1000)
+    } else stopClock()
+  }
   const resizeObserver = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => schedule()) : null
   const restore = () => {
     if (!surface) return
     if (drag) finishPointer(null, true)
     clearEdgeClick()
+    stopClock()
+    activity?.setSession(null)
     clearComposer()
     resizeObserver?.disconnect()
     surface.frame.removeAttribute('data-dsh-full-view')
@@ -417,14 +447,14 @@ export function installFullView(doc, input = {}) {
     }
     for (const key of ['x', 'y', 'width', 'height', 'collapsed-height']) surface.chat.style.removeProperty(`--dsh-fv-${key}`)
     header?.removeAttribute('data-dsh-floating-header')
-    const focusWasChrome = [badge, update, toolbar, ...handles].some(node => node?.contains(doc.activeElement))
-    toolbar?.remove(); edge?.remove(); badge?.remove(); update?.remove()
+    const focusWasChrome = [badge, toolbar, ...handles].some(node => node?.contains(doc.activeElement))
+    toolbar?.remove(); edge?.remove(); badge?.remove(); processing?.remove()
     for (const handle of handles) handle.remove()
     if (focusWasChrome) focusEditor()
-    toolbar = resize = edge = title = minimize = header = badge = update = null
+    toolbar = resize = edge = title = minimize = header = badge = processing = null
     handles = []
     surface = null
-    mode = 'expanded'; minimized = unread = false
+    mode = 'expanded'; minimized = false
     approvalState = savedAccessibility = sessionId = null
   }
   const syncApproval = () => {
@@ -452,7 +482,7 @@ export function installFullView(doc, input = {}) {
       savedAccessibility = Object.fromEntries(['inert', 'aria-hidden'].map(key => [key, surface.chat.getAttribute(key)]))
       sessionId = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
       buildChrome()
-      surface.frame.append(badge, update)
+      surface.frame.append(badge)
       surface.frame.setAttribute('data-dsh-full-view', '')
       surface.chat.setAttribute('data-dsh-floating-chat', '')
       syncComposer()
@@ -466,8 +496,9 @@ export function installFullView(doc, input = {}) {
     if (edge.parentElement !== surface.chat) surface.chat.append(edge)
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
-    if (nextSession !== sessionId) { sessionId = nextSession; unread = false; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true }) }
+    if (nextSession !== sessionId) { sessionId = nextSession; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true }) }
     syncApproval()
+    syncActivity()
     const nextHeader = surface.chat.querySelector('[data-conversation-header-leading]')?.closest('header')
     if (nextHeader !== header) { header?.removeAttribute('data-dsh-floating-header'); header = nextHeader; header?.setAttribute('data-dsh-floating-header', '') }
     const currentTitle = doc.title.replace(/\s*[—–-]\s*DeepSeek Harness\s*$/, '') || '聊天'
@@ -478,7 +509,7 @@ export function installFullView(doc, input = {}) {
     if (!disposed && raf === null) raf = win.requestAnimationFrame(sync)
   }
   const outsidePointer = event => {
-    if (!surface || mode !== 'expanded' || drag || approvalState || withinChat(event.target) || event.target === update || popupOpen()) return
+    if (!surface || mode !== 'expanded' || drag || approvalState || withinChat(event.target) || popupOpen()) return
     setMode('compact')
   }
   const focusChanged = () => { if (surface) updateGeometry() }
@@ -495,13 +526,10 @@ export function installFullView(doc, input = {}) {
     if (surface && mode === 'expanded' && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !popupOpen()) setMode('compact')
   }
   const observer = new win.MutationObserver(records => {
-    if (surface && mode !== 'expanded' && records.some(record => {
-      const target = record.target.nodeType === 1 ? record.target : record.target.parentElement
-      return (record.type === 'childList' || record.type === 'characterData') && withinChat(target) && belongsToConversation(target) && !!target.closest('[data-slot="conversation.session"], [data-conversation-region="messages"]')
-    })) unread = true
     if (records.some(record => record.type === 'childList' || record.type === 'characterData' || !record.attributeName.startsWith('data-dsh-'))) schedule()
   })
   observer.observe(doc.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-rightbar-fullscreen', 'data-sidebar-right-panel', 'data-sidebar-right-open', 'data-conversation-session', 'data-approval-key', 'data-question-key', 'data-plan-review-key', 'hidden', 'data-sidebar-collapsed'] })
+  observer.observe(doc.head, { childList: true, subtree: true, characterData: true })
   win.addEventListener('resize', schedule)
   win.addEventListener('blur', windowBlur)
   win.visualViewport?.addEventListener('resize', schedule)
@@ -509,12 +537,15 @@ export function installFullView(doc, input = {}) {
   doc.addEventListener('pointerdown', outsidePointer, true)
   doc.addEventListener('focusin', focusChanged)
   doc.addEventListener('focusout', schedule)
+  doc.addEventListener('input', schedule)
   doc.addEventListener('keydown', keydown)
+  const offActivity = activity?.subscribe(schedule)
   sync()
   const dispose = () => {
     if (disposed) return
     disposed = true
     observer.disconnect()
+    offActivity?.()
     win.removeEventListener('resize', schedule)
     win.removeEventListener('blur', windowBlur)
     win.visualViewport?.removeEventListener('resize', schedule)
@@ -522,6 +553,7 @@ export function installFullView(doc, input = {}) {
     doc.removeEventListener('pointerdown', outsidePointer, true)
     doc.removeEventListener('focusin', focusChanged)
     doc.removeEventListener('focusout', schedule)
+    doc.removeEventListener('input', schedule)
     doc.removeEventListener('keydown', keydown)
     if (raf !== null) win.cancelAnimationFrame(raf)
     restore()
@@ -532,20 +564,21 @@ export function installFullView(doc, input = {}) {
   return dispose
 }
 
-export const inject = ['sidebarRight', 'layout']
+export const inject = ['sidebarRight', 'layout', 'sessions', 'uiSession']
 
 /** Cordis owns cancellation and all DOM writes, including hot-reload cleanup. */
 export function apply(ctx) {
   ctx.effect(() => {
     const lifetime = new AbortController()
     let cleanup = () => {}
+    const activity = createActivitySource(ctx)
     void fetch('/dsh-full-view/api/config', { signal: lifetime.signal })
       .then(response => {
         if (!response.ok) throw new Error(`dsh-full-view config: HTTP ${response.status}`)
         return response.json()
       })
-      .then(config => { if (!lifetime.signal.aborted) cleanup = installFullView(document, config) })
+      .then(config => { if (!lifetime.signal.aborted) cleanup = installFullView(document, config, activity) })
       .catch(error => { if (!lifetime.signal.aborted) console.error('[dsh-full-view] 无法加载完整视图配置', error) })
-    return () => { lifetime.abort(); cleanup() }
+    return () => { lifetime.abort(); cleanup(); activity.dispose() }
   }, 'dsh-full-view: resident chat presentation')
 }

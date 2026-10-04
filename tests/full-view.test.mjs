@@ -358,18 +358,71 @@ test('审批覆盖层在紧凑或隐藏时出现会展开，处理完成后恢�
   } finally { dispose(); f.dom.window.close() }
 })
 
-test('收起时新会话内容出现提供查看入口，编辑草稿不会产生提醒', async () => {
+test('消息与草稿变化不会再弹出新内容提示或触发运行动画', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   try {
     f.enter(); await settle()
-    f.document.getElementById('draft').textContent += '草稿'; await settle()
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-unread'), false)
+    f.document.getElementById('draft').textContent += '草稿'
     f.document.getElementById('messages').textContent += '新增回复'; await settle()
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-unread'), true)
-    f.document.querySelector('[data-dsh-show-update]').click()
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(f.document.querySelector('[data-dsh-show-update]'), null)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-unread'), false)
-    assert.match(f.document.getElementById('messages').textContent, /新增回复/)
+    const badge = f.document.querySelector('[data-dsh-restore-chat]')
+    assert.equal(badge.textContent, '')
+    assert.ok(badge.querySelector('[data-dsh-whale-icon]'))
+    assert.equal(badge.hasAttribute('data-dsh-running'), false)
+    assert.equal(badge.getAttribute('title'), null)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+function activityFixture() {
+  let snapshot = { running: false, pending: false, startedAt: null }
+  const listeners = new Set()
+  return {
+    setSession(id) { this.id = id },
+    getSnapshot: () => snapshot,
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    update(next) { snapshot = next; for (const fn of listeners) fn() },
+    get listenerCount() { return listeners.size },
+  }
+}
+
+test('真实运行状态驱动输入条耗时和鲸鱼动画，待办、完成、退出停止计时', async () => {
+  const f = composerFixture(); const activity = activityFixture()
+  let tick; let timers = 0
+  f.dom.window.setInterval = fn => { tick = fn; timers++; return 7 }
+  f.dom.window.clearInterval = () => { tick = null; timers-- }
+  const dispose = install(f.document, {}, activity)
+  try {
+    f.enter(); await settle(); assert.equal(activity.id, 's1')
+    const draft = f.document.getElementById('draft')
+    draft.textContent = ''
+    const placeholder = f.document.createElement('div'); placeholder.setAttribute('data-composer-placeholder', ''); placeholder.textContent = '发送消息'
+    draft.parentElement.append(placeholder)
+    activity.update({ running: true, pending: false, startedAt: Date.now() - 65000 }); await settle()
+    const status = f.document.querySelector('[data-dsh-processing-status]')
+    const badge = f.document.querySelector('[data-dsh-restore-chat]')
+    assert.match(status.textContent, /^已处理 1 分 [56] 秒$/)
+    assert.equal(status.parentElement, f.document.querySelector('[data-input-scroll]'))
+    assert.equal(f.dom.window.getComputedStyle(placeholder).visibility, 'hidden')
+    draft.textContent = '未发送草稿'; draft.dispatchEvent(new f.dom.window.InputEvent('input', { bubbles: true })); await settle()
+    assert.equal(status.hidden, true); assert.equal(draft.textContent, '未发送草稿')
+    draft.textContent = ''; draft.dispatchEvent(new f.dom.window.InputEvent('input', { bubbles: true })); await settle()
+    assert.equal(status.hidden, false); assert.equal(timers, 1)
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(badge.hidden, false); assert.equal(badge.textContent, '')
+    assert.equal(badge.hasAttribute('data-dsh-running'), true)
+    activity.update({ running: true, pending: true, startedAt: Date.now() - 65000 }); await settle()
+    assert.equal(badge.hasAttribute('data-dsh-running'), false)
+    assert.equal(timers, 0); assert.equal(status.hidden, true)
+    activity.update({ running: false, pending: false, startedAt: null }); await settle()
+    assert.equal(status.hidden, true)
+    activity.update({ running: true, pending: false, startedAt: null }); await settle()
+    assert.equal(status.textContent, '处理中…'); assert.equal(timers, 0)
+    activity.update({ running: true, pending: false, startedAt: Date.now() }); await settle()
+    assert.equal(timers, 1)
+    f.exit(); await settle(); assert.equal(timers, 0)
+    assert.equal(f.document.querySelector('[data-dsh-processing-status]'), null)
+    dispose(); assert.equal(activity.listenerCount, 0)
   } finally { dispose(); f.dom.window.close() }
 })
 
@@ -445,12 +498,12 @@ test('提问和计划确认替换整个原生输入框时仍保持可见，处�
   }
 })
 
-test('查看更新后焦点返回原编辑器，键盘切换不被上一次拖动屏蔽', async () => {
+test('恢复后焦点返回原编辑器，键盘切换不被上一次拖动屏蔽', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   try {
     f.enter(); await settle()
-    f.document.getElementById('messages').textContent += '新内容'; await settle()
-    const update = f.document.querySelector('[data-dsh-show-update]'); update.focus(); update.click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const badge = f.document.querySelector('[data-dsh-restore-chat]'); badge.focus(); badge.click()
     assert.equal(f.document.activeElement, f.document.getElementById('draft'))
     f.document.querySelector('[data-dsh-minimize-chat]').click()
     const edge = f.document.querySelector('[data-dsh-full-view-edge]'); capture(edge)

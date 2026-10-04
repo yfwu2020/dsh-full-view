@@ -15,6 +15,6 @@
   "devDependencies": { "esbuild": "^0.25.0", "jsdom": "^29.1.1" },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar-right"], "platform": "web" }
+    "client": { "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar-right", "@deepseek-ai/dsh-api-session-controller", "@deepseek-ai/dsh-client-ui-session"], "platform": "web" }
   }
 }

@@ -17,7 +17,7 @@
 
 ## 适配范围
 
-宿主加载 `lib/index.js`，客户端通过 `window.__ModuleLoader__` 加载 `lib/client.js`。客户端依赖 `layout` 和 `sidebarRight` 服务。
+宿主加载 `lib/index.js`，客户端通过 `window.__ModuleLoader__` 加载 `lib/client.js`。客户端依赖 `layout`、`sidebarRight`、`sessions` 和 `uiSession` 服务。
 
 适配器通过 `data-rightbar-col`、`data-rightbar-fullscreen`、`data-sidebar-right-panel` 等语义标记找到原聊天容器，并检查会话身份匹配。它改变原聊天容器的定位，不重建会话、编辑器或 iframe。返回分栏使用面板自身的按钮。
 
@@ -39,7 +39,7 @@
 
 ## main 分支新增适配（尚未发布）
 
-交互采用紧凑、展开、隐藏三种状态，操作栏显示与消息区展开是两个独立条件。隐藏入口和更新提示附着在工作区，避免被原聊天的 inert 隔离。缩放与移动共用受约束的几何计算；鼠标取消恢复起始偏好，视口变化只限制呈现，不写回偏好。
+交互采用紧凑、展开、隐藏三种状态，操作栏显示与消息区展开是两个独立条件。鲸鱼恢复入口附着在工作区，避免被原聊天的 inert 隔离。缩放与移动共用受约束的几何计算；鼠标取消恢复起始偏好，视口变化只限制呈现，不写回偏好。
 
 标题和外缘切换紧凑 / 展开；左上角「−」始终隐藏整个小窗，保留恢复入口。减号的辅助名称及悬停提示都表示隐藏，不再使用 aria-expanded。
 
@@ -50,3 +50,11 @@
 只适配当前顶层会话的 composer，排除内嵌子会话。审批、提问、计划确认的原生标记触发展开；轨迹视图的 overlay 标记不参与待办判定。原输入区被替换时优先展示替代组件。退出与停用还原原有辅助属性，移除视觉视口监听和未完成的点击计时器。
 
 具体行为、参考依据和无法现场验证的边界见 [交互设计说明](interaction-design.md)。
+
+## 运行状态与鲸鱼入口（main，尚未发布）
+
+读取 `uiSession.sessionStatus` 的当前会话 running / pendingInteraction，借用 `sessions.binding(id)`，不延长会话生命周期。订阅该 binding 的 session 与 eventSource，取最后一个 `turn/start` 的 event.time；已有匹配 `turn/end` 的旧回合不能成为下一回合的计时起点。缺失起始记录时显示“处理中…”。
+
+在原 `data-input-scroll` 内按占位文字位置覆盖低对比度耗时，与按钮同一行，不增加卡片高度，不复制原编辑器、不弹出新内容通知。只有当前会话正在运行、没有待办且输入为空时显示；输入草稿时让出位置，清空后重新显示。完成、等待确认或退出完整视图停止秒级计时。切换会话或 binding 代际会释放旧订阅；停用释放所有订阅及计时器。不存储会话内容。
+
+40px 圆形恢复按钮只显示 Harness 原生鲸鱼尾巴，无可见文字及悬停标题，辅助名称保留“恢复聊天”。运行时读取已安装宿主 `ChatView.module.css` 样式中的 APNG mask，直接使用原生动画；空闲时去除 APNG 动画块，保留第一帧及原 CRC，显示相同图形的静止状态。遵从 prefers-reduced-motion 和 forced-colors，恢复和拖动继续使用原交互。插件不打包宿主品牌图片；该适配依赖当前已验证版本的样式标记与 mask 格式，宿主改变格式时需更新适配。
