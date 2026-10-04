@@ -92,6 +92,66 @@ test('收起成输入条后仍能输入和发送，点击外缘切换聊天并�
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('左上角减号始终隐藏聊天，标题仍可展开，恢复时保留原草稿', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    assert.equal(f.document.querySelector('[data-dsh-minimize-chat]').title, '隐藏聊天，保留恢复入口')
+    assert.equal(f.document.querySelector('[data-dsh-minimize-chat]').hasAttribute('aria-expanded'), false)
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    f.document.querySelector('[data-dsh-restore-chat]').click()
+    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
+    f.document.querySelector('[data-dsh-full-view-title]').click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    f.document.querySelector('[data-dsh-restore-chat]').click()
+    assert.equal(f.document.getElementById('draft').textContent, '正在编辑的草稿')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('紧凑输入路径的原生方形背景透明化，展开与退出恢复宿主背景', async () => {
+  const f = composerFixture()
+  const root = f.document.querySelector('[data-conversation-content]')
+  root.className = 'native-square-root'
+  const hostStyle = f.document.createElement('style')
+  hostStyle.textContent = '.native-square-root { background: rgb(255, 255, 255); }'
+  f.document.head.append(hostStyle)
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    assert.equal(f.dom.window.getComputedStyle(root).backgroundColor, 'rgba(0, 0, 0, 0)')
+    f.document.querySelector('[data-dsh-full-view-title]').click()
+    assert.equal(f.dom.window.getComputedStyle(root).backgroundColor, 'rgb(255, 255, 255)')
+    f.exit(); await settle()
+    assert.equal(f.dom.window.getComputedStyle(root).backgroundColor, 'rgb(255, 255, 255)')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('模型按钮图标适配保留原菜单事件与辅助标签，原生重绘和退出后可还原', async () => {
+  const f = composerFixture()
+  const model = f.document.getElementById('model')
+  model.setAttribute('aria-haspopup', 'menu')
+  model.setAttribute('aria-label', '选择模型，当前测试模型')
+  model.innerHTML = '<svg id="database-icon"></svg><span>测试模型</span><svg id="chevron"></svg>'
+  const icon = f.document.getElementById('database-icon')
+  let opened = 0; model.addEventListener('click', () => opened++)
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    assert.equal(f.dom.window.getComputedStyle(icon).display, 'none')
+    assert.notEqual(f.dom.window.getComputedStyle(f.document.getElementById('chevron')).display, 'none')
+    assert.equal(model.getAttribute('aria-label'), '选择模型，当前测试模型')
+    model.click(); assert.equal(opened, 1)
+    const replacement = model.cloneNode(true); model.replaceWith(replacement); await settle()
+    assert.equal(f.dom.window.getComputedStyle(replacement.querySelector('svg')).display, 'none')
+    f.exit(); await settle()
+    assert.notEqual(f.dom.window.getComputedStyle(replacement.querySelector('svg')).display, 'none')
+    assert.equal(f.document.querySelector('[data-dsh-full-view-model]'), null)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('原生输入框重新渲染时重新适配，退出完整视图清理所有外缘与输入框标记', async () => {
   const f = composerFixture()
   const dispose = install(f.document)

@@ -1,4 +1,5 @@
 /** All geometry overrides are scoped to markers owned by this plugin. */
+const brainGlyph = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c-1.2-2.7-5-2.6-6.2.5C3 5.5 2 8.2 3.2 10.3c-2.2 2.6-1.2 6.2 1.6 7.1-.1 3.7 4.8 5.3 7.2 2.6 2.4 2.7 7.3 1.1 7.2-2.6 2.8-.9 3.8-4.5 1.6-7.1 1.2-2.1.2-4.8-2.6-4.8C17 2.4 13.2 2.3 12 5Z M12 5v15 M5.8 5.5c-.5 1.7.2 3.3 1.8 4 M18.2 5.5c.5 1.7-.2 3.3-1.8 4 M3.2 10.3c1.6-.8 3.2-.2 4.2 1.3 M20.8 10.3c-1.6-.8-3.2-.2-4.2 1.3 M4.8 17.4c1.9.4 3.5-.6 3.6-2.3 M19.2 17.4c-1.9.4-3.5-.6-3.6-2.3"/></svg>')
 export const style = `
 [data-dsh-full-view] > [data-rightbar-col] { grid-column: 3; }
 [data-dsh-full-view] [data-sidebar-right-panel="fullscreen"][data-sidebar-right-open] {
@@ -86,6 +87,11 @@ export const style = `
 }
 [data-dsh-floating-chat] [data-dsh-full-view-input-tools] { grid-column: 1; grid-row: 1; gap: 4px !important; }
 [data-dsh-floating-chat] [data-dsh-full-view-input-trailing] { grid-column: 3; grid-row: 1; gap: 4px !important; margin: 0 !important; }
+[data-dsh-full-view-model-icon] { display: none !important; }
+[data-dsh-full-view-model]::before {
+  content: ''; flex: none; width: 18px; height: 18px; background: currentColor;
+  mask: url("data:image/svg+xml,${brainGlyph}") center / contain no-repeat;
+}
 [data-dsh-floating-chat] [data-dsh-full-view-input-tools] button[aria-label]:has(> span[aria-hidden="true"] > svg) > span:not([aria-hidden="true"]) { display: none !important; }
 [data-dsh-floating-chat] [data-dsh-full-view-input-tools] button[aria-label]:has(> span[aria-hidden="true"] > svg) { padding-inline: 4px; }
 [data-dsh-floating-chat] [data-dsh-full-view-input-tools] > div,
@@ -97,7 +103,7 @@ export const style = `
 [data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-toolbar] { display: none !important; }
 [data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-resize]:not([data-dsh-resize-direction="e"]):not([data-dsh-resize-direction="w"]) { display: none !important; }
 [data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-input-path] { display: flex !important; }
-[data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-path] { box-sizing: border-box; width: 100% !important; height: auto !important; min-height: 0 !important; flex: none !important; overflow: visible !important; }
+[data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-path] { box-sizing: border-box; width: 100% !important; height: auto !important; min-height: 0 !important; flex: none !important; overflow: visible !important; background: transparent !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-path]:not([data-composer-seat]) > :not([data-dsh-full-view-input-path]) { display: none !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-footer] { display: none !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-composer-seat] { background: transparent !important; }

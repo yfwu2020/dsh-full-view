@@ -50,6 +50,8 @@ export function installFullView(doc, input = {}) {
   let edge = null
   let composer = null
   let composerMarks = []
+  let modelTrigger = null
+  let modelIcon = null
   let collapsedHeight = 48
   let suppressEdgeClick = false
   let title = null
@@ -149,11 +151,11 @@ export function installFullView(doc, input = {}) {
     hide.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
     minimize.disabled = !!approvalState
     const label = minimized ? '展开聊天' : '收起聊天'
-    for (const control of [minimize, title, edge]) {
+    for (const control of [title, edge]) {
       control.setAttribute('aria-expanded', String(!minimized))
       control.setAttribute('aria-label', control === title ? `${label}：${title.textContent}` : label)
     }
-    minimize.title = label
+    minimize.title = hide.title
     title.title = title.textContent
     edge.title = approvalState ? '请先处理会话中的待办提示' : `点击外缘${minimized ? '展开' : '收起'}聊天，拖动移动`
     surface.chat.toggleAttribute('data-dsh-chat-unread', unread)
@@ -283,7 +285,7 @@ export function installFullView(doc, input = {}) {
     toolbar.setAttribute('aria-label', '聊天小窗')
     title = button('展开聊天', 'data-dsh-full-view-title', null, delayedToggle)
     title.textContent = '聊天'
-    minimize = button('收起聊天', 'data-dsh-minimize-chat', 'M5 12h14', toggleMinimize)
+    minimize = button('隐藏聊天，保留恢复入口', 'data-dsh-minimize-chat', 'M5 12h14', () => setMode('hidden'))
     hide = button('隐藏聊天，保留恢复入口', 'data-dsh-hide-chat', null, () => setMode('hidden'))
     hide.textContent = '×'
     const grip = button('移动聊天小窗：方向键移动，Shift 加大步长', 'data-dsh-move-chat', null, () => {})
@@ -354,7 +356,24 @@ export function installFullView(doc, input = {}) {
     }
     toolbar.addEventListener('dblclick', resetOnDoubleClick)
   }
+  const clearModel = () => {
+    modelTrigger?.removeAttribute('data-dsh-full-view-model')
+    modelIcon?.removeAttribute('data-dsh-full-view-model-icon')
+    modelTrigger = modelIcon = null
+  }
+  const syncModel = () => {
+    const next = composer?.trailing?.querySelector('button[aria-haspopup="menu"]') ?? null
+    const icon = next?.querySelector(':scope > svg:first-of-type') ?? null
+    if (next === modelTrigger && icon === modelIcon) return
+    clearModel()
+    if (!next || !icon) return
+    modelTrigger = next; modelIcon = icon
+    // Keep the host button, SVG, accessible name and menu handlers intact.
+    modelTrigger.setAttribute('data-dsh-full-view-model', '')
+    modelIcon.setAttribute('data-dsh-full-view-model-icon', '')
+  }
   const clearComposer = () => {
+    clearModel()
     if (composer) resizeObserver?.unobserve?.(composer.seat)
     for (const [element, marker] of composerMarks) element.removeAttribute(marker)
     composerMarks = []
@@ -367,7 +386,7 @@ export function installFullView(doc, input = {}) {
     const scroll = card?.querySelector('[data-input-scroll]')
     const row = scroll?.nextElementSibling
     const footer = card?.nextElementSibling
-    if (composer?.seat === seat && composer?.card === card && composer?.row === row && composer?.footer === footer && composer?.tools === row?.firstElementChild && composer?.trailing === row?.lastElementChild) return
+    if (composer?.seat === seat && composer?.card === card && composer?.row === row && composer?.footer === footer && composer?.tools === row?.firstElementChild && composer?.trailing === row?.lastElementChild) { syncModel(); return }
     clearComposer()
     if (!seat || !card || !scroll || !row) return
     composer = { seat, card, row, footer, tools: row.firstElementChild, trailing: row.lastElementChild }
@@ -384,6 +403,7 @@ export function installFullView(doc, input = {}) {
     mark(composer.tools, 'data-dsh-full-view-input-tools')
     mark(composer.trailing, 'data-dsh-full-view-input-trailing')
     surface.chat.setAttribute('data-dsh-chat-composer', '')
+    syncModel()
     resizeObserver?.observe(seat)
   }
   const resizeObserver = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => schedule()) : null
