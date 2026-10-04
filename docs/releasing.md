@@ -4,6 +4,10 @@
 
 包名：`@yfwu2020/dsh-full-view`。发布工作流：[`publish.yml`](../.github/workflows/publish.yml)。
 
+## 日常提交与版本发布
+
+按维护者要求，日常修复只提交代码；不递增版本号、不创建版本标签或 GitHub Release，也不上传 npm。只有维护者明确要求“发布新版本”时，才执行下方发布步骤。普通代码推送只触发检查。
+
 ## 首次配置
 
 在 npm 包设置中添加 GitHub Actions 的 Trusted Publisher：
