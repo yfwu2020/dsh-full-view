@@ -254,6 +254,27 @@ test('外部点击与 Esc 收起，原生弹出菜单和输入法组合键不干
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('其他插件藏在 display:none 父层里的对话框不阻止 Esc 和外部点击收起', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    const panel = f.document.createElement('div')
+    panel.style.display = 'none'
+    panel.innerHTML = '<div role="dialog" style="display:flex"><button>设置</button></div>'
+    f.document.body.append(panel)
+    f.enter(); await settle()
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.getElementById('draft').dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.getElementById('sidebar').dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    panel.style.display = 'block'
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.getElementById('draft').dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('审批覆盖层在紧凑或隐藏时出现会展开，处理完成后恢复原状态', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   try {

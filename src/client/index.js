@@ -109,7 +109,13 @@ export function installFullView(doc, input = {}) {
     if (node.matches(pendingSelector) && surface?.chat.contains(node) && !belongsToConversation(node)) return false
     if (node.closest('[hidden], [inert], [aria-hidden="true"]')) return false
     const css = win.getComputedStyle(node)
-    return css.display !== 'none' && css.visibility !== 'hidden'
+    if (css.visibility === 'hidden' || css.visibility === 'collapse') return false
+    // Other plugins keep dialog children mounted inside display:none panels.
+    // A child's own computed display remains flex in that hidden subtree.
+    for (let ancestor = node; ancestor; ancestor = ancestor.parentElement) {
+      if (win.getComputedStyle(ancestor).display === 'none') return false
+    }
+    return true
   })
   const updateGeometry = () => {
     if (!surface) return
