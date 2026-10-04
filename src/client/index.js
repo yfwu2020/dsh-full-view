@@ -34,6 +34,11 @@ export function installFullView(doc, input = {}) {
   let surface = null
   let toolbar = null
   let resize = null
+  let edge = null
+  let composer = null
+  let composerMarks = []
+  let collapsedHeight = 48
+  let suppressEdgeClick = false
   let title = null
   let minimize = null
   let header = null
@@ -63,11 +68,12 @@ export function installFullView(doc, input = {}) {
     const gap = Math.min(config.edgeGap, Math.max(0, Math.min(b.width, b.height) / 8))
     const width = Math.max(0, Math.min(Math.max(280, preferred.width), b.width - 2 * gap))
     const height = Math.max(0, Math.min(Math.max(240, preferred.height), b.height - 2 * gap))
-    const visibleHeight = minimized ? 36 : height
+    const visibleHeight = minimized ? (composer ? collapsedHeight : 36) : height
+    const offset = minimized && composer ? height - visibleHeight : 0
     return {
       width, height,
       x: Math.min(Math.max(preferred.x ?? b.left + b.width - width - gap, b.left + gap), b.left + b.width - width - gap),
-      y: Math.min(Math.max(preferred.y ?? b.top + b.height - visibleHeight - gap, b.top + gap), b.top + b.height - visibleHeight - gap),
+      y: Math.min(Math.max(preferred.y === undefined ? b.top + b.height - visibleHeight - gap : preferred.y + offset, b.top + gap), b.top + b.height - visibleHeight - gap),
     }
   }
   const persist = () => {
@@ -76,6 +82,10 @@ export function installFullView(doc, input = {}) {
   }
   const updateGeometry = () => {
     if (!surface) return
+    if (composer) {
+      collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2)
+      setStyle(surface.chat, '--dsh-fv-collapsed-height', `${collapsedHeight}px`)
+    }
     const b = bounds()
     const g = geometry()
     setStyle(surface.frame, '--dsh-fv-content-width', `${b.width}px`)
@@ -91,14 +101,18 @@ export function installFullView(doc, input = {}) {
     minimize.setAttribute('aria-label', minimized ? '展开聊天' : '收起聊天')
     minimize.setAttribute('title', minimized ? '展开聊天' : '收起聊天')
     minimize.setAttribute('aria-expanded', String(!minimized))
+    edge.setAttribute('aria-label', minimized ? '展开聊天' : '收起聊天')
+    edge.title = minimized ? '点击外缘展开聊天，拖动移动' : '点击外缘收起聊天，拖动移动'
+    edge.setAttribute('aria-expanded', String(!minimized))
     updateGeometry()
   }
   const pointerDown = event => {
-    if (event.button !== 0 || event.target.closest('button')) return
+    if (event.button !== 0 || (event.currentTarget !== edge && event.target.closest('button'))) return
     event.preventDefault()
     const target = event.currentTarget
     const g = geometry()
     drag = { target, pointerId: event.pointerId, resize: target === resize, startX: event.clientX, startY: event.clientY, geometry: g }
+    if (target === edge) suppressEdgeClick = false
     target.setPointerCapture(event.pointerId)
     surface.frame.setAttribute('data-dsh-fv-dragging', '')
   }
@@ -106,11 +120,13 @@ export function installFullView(doc, input = {}) {
     if (!drag || event.pointerId !== drag.pointerId) return
     const dx = event.clientX - drag.startX
     const dy = event.clientY - drag.startY
+    if (drag.target === edge && Math.hypot(dx, dy) > 4) suppressEdgeClick = true
+    const offset = minimized && composer ? drag.geometry.height - collapsedHeight : 0
     preferred = drag.resize
       ? { ...drag.geometry, width: drag.geometry.width + dx, height: drag.geometry.height + dy }
-      : { ...drag.geometry, x: drag.geometry.x + dx, y: drag.geometry.y + dy }
+      : { ...drag.geometry, x: drag.geometry.x + dx, y: drag.geometry.y + dy - offset }
     const constrained = geometry()
-    preferred = { ...constrained }
+    preferred = { ...constrained, y: constrained.y - offset }
     updateGeometry()
   }
   const pointerEnd = event => {
@@ -142,6 +158,22 @@ export function installFullView(doc, input = {}) {
     minimize = button('收起聊天', 'data-dsh-minimize-chat', 'M5 12h14', toggleMinimize)
     minimize.setAttribute('aria-expanded', 'true')
     toolbar.append(title, minimize, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit))
+    edge = doc.createElement('button')
+    edge.type = 'button'
+    edge.setAttribute('data-dsh-full-view-edge', '')
+    edge.setAttribute('aria-label', '收起聊天')
+    edge.setAttribute('aria-expanded', 'true')
+    edge.title = '点击外缘收起聊天，拖动移动'
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      const segment = doc.createElement('span')
+      segment.setAttribute('data-dsh-edge-side', side)
+      segment.setAttribute('aria-hidden', 'true')
+      edge.append(segment)
+    }
+    edge.addEventListener('click', () => {
+      if (suppressEdgeClick) { suppressEdgeClick = false; return }
+      toggleMinimize()
+    })
     resize = doc.createElement('div')
     resize.setAttribute('data-dsh-full-view-resize', '')
     resize.setAttribute('role', 'separator')
@@ -160,7 +192,7 @@ export function installFullView(doc, input = {}) {
       preferred = { ...g, width: g.width + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0), height: g.height + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) }
       updateGeometry(); persist()
     })
-    for (const element of [toolbar, resize]) {
+    for (const element of [toolbar, resize, edge]) {
       element.addEventListener('pointerdown', pointerDown)
       element.addEventListener('pointermove', pointerMove)
       element.addEventListener('pointerup', pointerEnd)
@@ -173,19 +205,53 @@ export function installFullView(doc, input = {}) {
       updateGeometry(); persist()
     })
   }
+  const clearComposer = () => {
+    if (composer) resizeObserver?.unobserve?.(composer.seat)
+    for (const [element, marker] of composerMarks) element.removeAttribute(marker)
+    composerMarks = []
+    composer = null
+    surface?.chat.removeAttribute('data-dsh-chat-composer')
+  }
+  const syncComposer = () => {
+    const seat = surface.chat.querySelector('[data-composer-seat]')
+    const card = seat?.querySelector('[data-composer-card]')
+    const scroll = card?.querySelector('[data-input-scroll]')
+    const row = scroll?.nextElementSibling
+    const footer = card?.nextElementSibling
+    if (composer?.seat === seat && composer?.card === card && composer?.row === row && composer?.footer === footer && composer?.tools === row?.firstElementChild && composer?.trailing === row?.lastElementChild) return
+    clearComposer()
+    if (!seat || !card || !scroll || !row) return
+    composer = { seat, card, row, footer, tools: row.firstElementChild, trailing: row.lastElementChild }
+    const mark = (element, marker) => {
+      if (!element) return
+      element.setAttribute(marker, '')
+      composerMarks.push([element, marker])
+    }
+    for (let node = seat; node && node !== surface.chat; node = node.parentElement) mark(node, 'data-dsh-full-view-input-path')
+    for (let node = card.parentElement; node && node !== seat; node = node.parentElement) mark(node, 'data-dsh-full-view-input-shell')
+    mark(card, 'data-dsh-full-view-composer-card')
+    mark(row, 'data-dsh-full-view-input-row')
+    mark(footer, 'data-dsh-full-view-input-footer')
+    mark(composer.tools, 'data-dsh-full-view-input-tools')
+    mark(composer.trailing, 'data-dsh-full-view-input-trailing')
+    surface.chat.setAttribute('data-dsh-chat-composer', '')
+    resizeObserver?.observe(seat)
+  }
   const resizeObserver = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => schedule()) : null
   const restore = () => {
     if (!surface) return
     if (drag) pointerEnd({ pointerId: drag.pointerId })
+    clearComposer()
     resizeObserver?.disconnect()
     surface.frame.removeAttribute('data-dsh-full-view')
     surface.frame.style.removeProperty('--dsh-fv-content-width')
     surface.chat.removeAttribute('data-dsh-floating-chat')
     surface.chat.removeAttribute('data-dsh-chat-minimized')
+    surface.chat.style.removeProperty('--dsh-fv-collapsed-height')
     for (const key of ['x', 'y', 'width', 'height']) surface.chat.style.removeProperty(`--dsh-fv-${key}`)
     header?.removeAttribute('data-dsh-floating-header')
-    toolbar?.remove(); resize?.remove()
-    toolbar = resize = title = minimize = header = null
+    toolbar?.remove(); resize?.remove(); edge?.remove()
+    toolbar = resize = edge = title = minimize = header = null
     surface = null
     minimized = false
   }
@@ -200,12 +266,16 @@ export function installFullView(doc, input = {}) {
       buildChrome()
       surface.frame.setAttribute('data-dsh-full-view', '')
       surface.chat.setAttribute('data-dsh-floating-chat', '')
+      syncComposer()
+      if (composer) toggleMinimize()
       resizeObserver?.observe(surface.frame)
       if (surface.sidebar) resizeObserver?.observe(surface.sidebar)
     }
     if (!surface) return
     if (toolbar.parentElement !== surface.chat) surface.chat.prepend(toolbar)
     if (resize.parentElement !== surface.chat) surface.chat.append(resize)
+    if (edge.parentElement !== surface.chat) surface.chat.append(edge)
+    syncComposer()
     const nextHeader = surface.chat.querySelector('[data-conversation-header-leading]')?.closest('header')
     if (nextHeader !== header) { header?.removeAttribute('data-dsh-floating-header'); header = nextHeader; header?.setAttribute('data-dsh-floating-header', '') }
     const currentTitle = doc.title.replace(/\s*[—–-]\s*DeepSeek Harness\s*$/, '') || '聊天'

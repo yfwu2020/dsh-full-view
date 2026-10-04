@@ -33,6 +33,85 @@ function fixture() {
 
 const settle = async () => { await new Promise(resolve => setTimeout(resolve, 40)) }
 
+function composerFixture() {
+  const f = fixture()
+  f.chat.innerHTML = `<div data-slot="main.conversation"><div data-conversation-content data-conversation-session="s1"><div data-conversation-scroll>
+    <section data-conversation-region="messages"><div id="messages">已有回复</div></section>
+    <div data-composer-seat><div><div><div data-composer-card>
+      <div data-input-scroll><div><div id="draft" data-composer-input contenteditable="true" role="textbox">正在编辑的草稿</div></div></div>
+      <div><div><button id="add" aria-haspopup="listbox">附件</button><button id="permission" aria-label="权限模式：完全权限"><span aria-hidden="true"><svg></svg></span><span id="permission-label">完全权限</span></button></div><div><button id="model">模型</button><button id="send">发送</button></div></div>
+    </div><div id="input-footer"><span>用量统计</span></div></div></div></div>
+  </div></div></div>`
+  return f
+}
+
+function displayed(element, win) {
+  for (let current = element; current; current = current.parentElement) {
+    if (win.getComputedStyle(current).display === 'none') return false
+  }
+  return true
+}
+
+test('收起成输入条后仍能输入和发送，点击外缘切换聊天并保留原节点', async () => {
+  const f = composerFixture()
+  const draft = f.document.getElementById('draft')
+  const messages = f.document.getElementById('messages')
+  const preview = f.document.getElementById('preview')
+  let sends = 0
+  f.document.getElementById('send').addEventListener('click', () => sends++)
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const edge = f.document.querySelector('[data-dsh-full-view-edge]')
+    assert.ok(edge, '小窗外缘应提供展开/收起入口')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    assert.equal(edge.getAttribute('aria-expanded'), 'false')
+    assert.equal(displayed(draft, f.dom.window), true)
+    assert.equal(displayed(messages, f.dom.window), false)
+    assert.equal(displayed(f.document.getElementById('input-footer'), f.dom.window), false)
+    assert.equal(displayed(f.document.getElementById('permission-label'), f.dom.window), false)
+    assert.equal(f.document.getElementById('permission').getAttribute('aria-label'), '权限模式：完全权限')
+    draft.textContent = '继续编辑的草稿'
+    draft.dispatchEvent(new f.dom.window.InputEvent('input', { bubbles: true }))
+    for (const id of ['draft', 'add', 'permission', 'model', 'send']) f.document.getElementById(id).click()
+    assert.equal(sends, 1)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '编辑和点击原按钮不应切换聊天')
+    messages.textContent += '，后台流式追加'
+    edge.click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(edge.getAttribute('aria-expanded'), 'true')
+    assert.equal(displayed(messages, f.dom.window), true)
+    assert.equal(displayed(f.document.getElementById('input-footer'), f.dom.window), true)
+    assert.match(messages.textContent, /后台流式追加/)
+    assert.equal(f.document.getElementById('draft'), draft)
+    assert.equal(f.document.getElementById('preview'), preview)
+    edge.click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    assert.equal(draft.textContent, '继续编辑的草稿')
+    assert.equal(displayed(draft, f.dom.window), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('原生输入框重新渲染时重新适配，退出完整视图清理所有外缘与输入框标记', async () => {
+  const f = composerFixture()
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const oldCard = f.document.querySelector('[data-composer-card]')
+    const newCard = oldCard.cloneNode(true)
+    oldCard.replaceWith(newCard)
+    await settle()
+    assert.equal(f.document.querySelectorAll('[data-dsh-full-view-edge]').length, 1)
+    assert.equal(newCard.hasAttribute('data-dsh-full-view-composer-card'), true)
+    f.exit(); await settle()
+    assert.equal(f.document.querySelector('[data-dsh-full-view-edge]'), null)
+    assert.equal(f.document.querySelector('[data-dsh-full-view-input-path]'), null)
+    assert.equal(f.document.querySelector('[data-dsh-full-view-composer-card]'), null)
+    assert.equal(newCard.hasAttribute('data-composer-card'), true)
+    assert.equal(displayed(f.document.getElementById('messages'), f.dom.window), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('双击右下角恢复配置尺寸，保留位置和草稿，并记住恢复后的尺寸', async () => {
   for (const config of [{}, { chatWidth: 480, chatHeight: 600 }]) {
     const f = fixture()
