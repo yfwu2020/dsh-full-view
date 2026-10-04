@@ -6,7 +6,7 @@
 
 [下载安装包](https://github.com/yfwu2020/dsh-full-view/releases/latest) · [报告问题](https://github.com/yfwu2020/dsh-full-view/issues) · [更新记录](#更新记录)
 
-![完整视图：网页占据主工作区，原聊天保留在右下角小窗中](docs/images/full-view.jpg)
+![完整视图：网页占据主工作区，原聊天保留在右下角小窗中](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/full-view.jpg)
 
 > 本文配图均为 DeepSeek Harness 实际界面截图。操作截图在 macOS Desktop 中运行本插件，使用公开示例网页展示分栏、聊天小窗和收起状态；为避免展示其他会话，截图时收起了左侧导航。
 
@@ -25,7 +25,13 @@
 ### 通过 Harness 插件管理页安装
 
 1. 打开 Harness 左侧的 **插件** 页面，点击 **添加插件**。
-2. 粘贴下面的 0.1.1 安装包地址，完成安装：
+2. 填写 npm 包名，完成安装：
+
+   ```text
+   @yfwu2020/dsh-full-view
+   ```
+
+   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.1`。也可以使用 GitHub 上的 0.1.1 安装包地址：
 
    ```text
    https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.1/yfwu2020-dsh-full-view-0.1.1.tgz
@@ -34,7 +40,7 @@
 3. 在已安装列表中找到 **`@yfwu2020/dsh-full-view`**，打开开关。
 4. 回到会话，打开一个右侧文件或浏览器面板，点击面板上的 **全屏**。
 
-![Harness 插件管理页：在列表底部找到 @yfwu2020/dsh-full-view](docs/images/plugin-manager.png)
+![Harness 插件管理页：在列表底部找到 @yfwu2020/dsh-full-view](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/plugin-manager.png)
 
 图中的插件开关处于关闭状态。安装后请将这一行的开关打开，再进入右侧面板的「全屏」。
 
@@ -58,13 +64,13 @@ github:yfwu2020/dsh-full-view#v0.1.1
 
 正常状态下，聊天和文件或网页预览并排显示。先在 Harness 中打开需要查看的文件或网页，再点击右面板的 **全屏**。
 
-![分栏视图：聊天在中间，网页预览在右侧，输入框中保留着草稿](docs/images/split-view.jpg)
+![分栏视图：聊天在中间，网页预览在右侧，输入框中保留着草稿](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/split-view.jpg)
 
 ### 2. 在完整视图里继续聊天
 
 进入完整视图后，预览占据主工作区，当前聊天浮到右下角。左侧导航若已展开，会继续保留。输入框中原有的草稿继续保留，可以接着编辑和发送。
 
-![完整视图中的聊天小窗：顶部标题栏、底部输入框和右下角调整大小手柄](docs/images/full-view.jpg)
+![完整视图中的聊天小窗：顶部标题栏、底部输入框和右下角调整大小手柄](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/full-view.jpg)
 
 | 小窗上的位置 | 操作 | 结果 |
 | --- | --- | --- |
@@ -81,7 +87,7 @@ github:yfwu2020/dsh-full-view#v0.1.1
 
 点击标题栏上的减号，小窗收成一条细标题栏。对话内容和输入草稿仍然保留；再次点击即可继续聊天。
 
-![收起聊天：工作区保持展开，聊天小窗只保留一条标题栏](docs/images/collapsed-chat.jpg)
+![收起聊天：工作区保持展开，聊天小窗只保留一条标题栏](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/collapsed-chat.jpg)
 
 ### 4. 回到原来的分栏
 
