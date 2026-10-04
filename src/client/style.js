@@ -12,12 +12,13 @@ export const style = `
 [data-dsh-floating-chat] {
   position: absolute !important; left: var(--dsh-fv-x) !important; top: var(--dsh-fv-y) !important;
   width: var(--dsh-fv-width) !important; height: var(--dsh-fv-height) !important;
-  min-width: 0; min-height: 0; z-index: 50; display: flex !important; flex-direction: column;
+  min-width: 0; min-height: 0; z-index: 50; container-type: inline-size; container-name: dsh-floating-chat; display: flex !important; flex-direction: column;
   background: var(--dsw-alias-bg-base, #fff); color: var(--dsw-alias-label-primary, #202124);
   border: 1px solid var(--dsw-alias-border-l3, #ddd) !important; border-radius: 14px;
   box-shadow: 0 12px 40px #0002, 0 2px 8px #0001; overflow: hidden;
   --dsh-frame-leading-clearance: 0px;
   animation: dsh-fv-appear 180ms ease-out;
+  transition: border-radius 160ms ease;
 }
 [data-dsh-floating-chat] > :not([data-dsh-full-view-toolbar]):not([data-dsh-full-view-resize]):not([data-dsh-full-view-edge]) {
   flex: 1 1 0; min-height: 0; max-height: 100%; overflow: hidden;
@@ -39,7 +40,7 @@ export const style = `
   user-select: none; -webkit-app-region: no-drag; border-bottom: .5px solid var(--dsw-alias-border-l3, #ddd);
   background: var(--dsw-alias-bg-base, #fff); font: 12px/1.4 system-ui, sans-serif;
 }
-[data-dsh-full-view-title] { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+[data-dsh-full-view-toolbar] [data-dsh-full-view-title] { width: auto; justify-content: flex-start; text-align: left; font: inherit; color: inherit; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 [data-dsh-full-view-toolbar] button {
   flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
   background: transparent; border: 0; border-radius: 6px; cursor: pointer; color: var(--dsw-alias-label-secondary, #666);
@@ -49,7 +50,19 @@ export const style = `
 [data-dsh-full-view-toolbar] svg { width: 15px; height: 15px; }
 [data-dsh-floating-chat][data-dsh-chat-minimized] { height: 36px !important; }
 [data-dsh-floating-chat][data-dsh-chat-minimized]:not([data-dsh-chat-composer]) > :not([data-dsh-full-view-toolbar]):not([data-dsh-full-view-edge]) { display: none !important; }
-[data-dsh-full-view-resize] { position: absolute; width: 16px; height: 16px; bottom: 1px; right: 1px; z-index: 2; cursor: nwse-resize; touch-action: none; }
+[data-dsh-full-view-resize] { position: absolute; z-index: 4; touch-action: none; -webkit-app-region: no-drag; }
+[data-dsh-resize-direction="se"], [data-dsh-resize-direction="nw"], [data-dsh-resize-direction="ne"], [data-dsh-resize-direction="sw"] { width: 14px; height: 14px; }
+[data-dsh-resize-direction="se"] { right: 0; bottom: 0; cursor: nwse-resize; }
+[data-dsh-resize-direction="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+[data-dsh-resize-direction="ne"] { right: 0; top: 0; cursor: nesw-resize; }
+[data-dsh-resize-direction="sw"] { left: 0; bottom: 0; cursor: nesw-resize; }
+[data-dsh-resize-direction="w"], [data-dsh-resize-direction="e"] { top: 14px; bottom: 14px; width: 6px; cursor: ew-resize; }
+[data-dsh-resize-direction="w"] { left: 0; }
+[data-dsh-resize-direction="e"] { right: 0; }
+[data-dsh-resize-direction="n"], [data-dsh-resize-direction="s"] { left: 14px; right: 14px; height: 6px; cursor: ns-resize; }
+[data-dsh-resize-direction="n"] { top: 0; }
+[data-dsh-resize-direction="s"] { bottom: 0; }
+[data-dsh-full-view-resize]:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, #5686fe); outline-offset: -2px; }
 [data-dsh-full-view-edge] { position: absolute; inset: 0; z-index: 3; pointer-events: none; background: transparent; border: 0; border-radius: inherit; padding: 0; touch-action: none; }
 [data-dsh-full-view-edge]:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, #5686fe); outline-offset: 2px; }
 [data-dsh-edge-side] { position: absolute; pointer-events: auto; cursor: pointer; }
@@ -82,15 +95,38 @@ export const style = `
 [data-dsh-floating-chat] [data-dsh-full-view-composer-card] > :not([data-input-scroll]):not([data-dsh-full-view-input-row]) { grid-column: 1 / -1; }
 [data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] { height: var(--dsh-fv-collapsed-height, 48px) !important; border-radius: 24px; overflow: visible; }
 [data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-toolbar] { display: none !important; }
-[data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-resize] { display: none !important; }
+[data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-resize]:not([data-dsh-resize-direction="e"]):not([data-dsh-resize-direction="w"]) { display: none !important; }
 [data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-full-view-input-path] { display: flex !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-path] { box-sizing: border-box; width: 100% !important; height: auto !important; min-height: 0 !important; flex: none !important; overflow: visible !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-path]:not([data-composer-seat]) > :not([data-dsh-full-view-input-path]) { display: none !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-input-footer] { display: none !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-composer-seat] { background: transparent !important; }
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-composer-card] { box-shadow: none !important; background: transparent; }
+[data-dsh-floating-chat][data-dsh-chat-minimized][data-dsh-chat-chrome] { border-radius: 18px; }
+[data-dsh-floating-chat][data-dsh-chat-minimized][data-dsh-chat-chrome] > [data-dsh-full-view-toolbar] { display: flex !important; border-radius: 18px 18px 0 0; }
+[data-dsh-full-view-toolbar] [data-dsh-hide-chat] { font-size: 20px; }
+[data-dsh-full-view-toolbar] [data-dsh-move-chat] { font-size: 20px; cursor: grab; touch-action: none; }
+[data-dsh-full-view-toolbar] button:disabled { opacity: .35; cursor: default; }
+[data-dsh-floating-chat][data-dsh-chat-hidden] { display: none !important; }
+[data-dsh-restore-chat], [data-dsh-show-update] {
+  position: absolute; z-index: 51; box-sizing: border-box; height: 36px; border: 1px solid var(--dsw-alias-border-l3, #ddd);
+  border-radius: 18px; padding: 0 14px; color: var(--dsw-alias-label-primary, #202124); background: var(--dsw-alias-bg-base, #fff);
+  box-shadow: 0 4px 18px #0002; font: 12px/1.4 system-ui, sans-serif; cursor: pointer; -webkit-app-region: no-drag;
+}
+[data-dsh-restore-chat] { touch-action: none; }
+[data-dsh-show-update] { height: 28px; }
+[data-dsh-restore-chat][hidden], [data-dsh-show-update][hidden] { display: none !important; }
+[data-dsh-restore-chat]:focus-visible, [data-dsh-show-update]:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, #5686fe); outline-offset: 2px; }
+[data-dsh-floating-chat][data-dsh-chat-unread] { border-color: var(--dsw-focus-ring-color, #5686fe) !important; }
 [data-dsh-fv-dragging] { user-select: none; cursor: grabbing; }
+[data-dsh-fv-dragging] [data-dsh-floating-chat] { transition: none; }
 [data-dsh-fv-dragging] iframe { pointer-events: none !important; }
-@keyframes dsh-fv-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { [data-dsh-floating-chat] { animation: none; } }
+@container dsh-floating-chat (max-width: 320px) {
+  [data-dsh-floating-chat] [data-dsh-full-view-composer-card] { grid-template-columns: minmax(0, 1fr) auto !important; }
+  [data-dsh-floating-chat] [data-input-scroll] { grid-column: 1 / -1; grid-row: 1; }
+  [data-dsh-floating-chat] [data-dsh-full-view-input-tools] { grid-column: 1; grid-row: 2; }
+  [data-dsh-floating-chat] [data-dsh-full-view-input-trailing] { grid-column: 2; grid-row: 2; }
+}
+@keyframes dsh-fv-appear { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-dsh-floating-chat] { animation: none; transition: none; } }
 `

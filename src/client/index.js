@@ -2,6 +2,7 @@ import { resolveConfig } from '../config.js'
 import { style } from './style.js'
 
 const geometryKey = 'dsh.full-view.geometry.v1'
+const pendingSelector = '[data-approval-key], [data-question-key], [data-plan-review-key]'
 const cleanupKey = Symbol.for('@yfwu2020/dsh-full-view.cleanup')
 
 /** Locate the resident chat beside the semantic right-column marker; no CSS hashes. */
@@ -34,6 +35,18 @@ export function installFullView(doc, input = {}) {
   let surface = null
   let toolbar = null
   let resize = null
+  let handles = []
+  let badge = null
+  let update = null
+  let hide = null
+  let hovered = false
+  let unread = false
+  let approvalState = null
+  let savedAccessibility = null
+  let sessionId = null
+  let suppressChromeClick = false
+  let edgeClickTimer = null
+  let mode = 'expanded'
   let edge = null
   let composer = null
   let composerMarks = []
@@ -59,151 +72,281 @@ export function installFullView(doc, input = {}) {
   const bounds = () => {
     const box = surface.frame.getBoundingClientRect()
     const sidebar = surface.sidebar?.getBoundingClientRect()
-    const left = Math.min(box.width, Math.max(0, (sidebar?.right ?? box.left) - box.left))
+    const viewport = win.visualViewport
     const chromeTop = Number.parseFloat(win.getComputedStyle(doc.documentElement).getPropertyValue('--dsh-frame-chrome-top')) || 0
-    return { left, top: chromeTop, width: box.width - left, height: box.height - chromeTop }
+    const left = Math.max(0, (sidebar?.right ?? box.left) - box.left, (viewport?.offsetLeft ?? 0) - box.left)
+    const top = Math.max(chromeTop, (viewport?.offsetTop ?? 0) - box.top)
+    const right = Math.min(box.width, viewport ? viewport.offsetLeft + viewport.width - box.left : box.width)
+    const bottom = Math.min(box.height, viewport ? viewport.offsetTop + viewport.height - box.top : box.height)
+    return { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) }
   }
   const geometry = () => {
     const b = bounds()
     const gap = Math.min(config.edgeGap, Math.max(0, Math.min(b.width, b.height) / 8))
     const width = Math.max(0, Math.min(Math.max(280, preferred.width), b.width - 2 * gap))
     const height = Math.max(0, Math.min(Math.max(240, preferred.height), b.height - 2 * gap))
-    const visibleHeight = minimized ? (composer ? collapsedHeight : 36) : height
-    const offset = minimized && composer ? height - visibleHeight : 0
+    const visibleHeight = Math.min(height, mode === 'expanded' ? height : composer ? collapsedHeight : 36)
+    const offset = mode !== 'expanded' && composer ? height - visibleHeight : 0
+    const clamp = (n, lo, hi) => Math.max(lo, Math.min(n, Math.max(lo, hi)))
     return {
-      width, height,
-      x: Math.min(Math.max(preferred.x ?? b.left + b.width - width - gap, b.left + gap), b.left + b.width - width - gap),
-      y: Math.min(Math.max(preferred.y === undefined ? b.top + b.height - visibleHeight - gap : preferred.y + offset, b.top + gap), b.top + b.height - visibleHeight - gap),
+      width, height, visibleHeight, offset,
+      x: clamp(preferred.x ?? b.left + b.width - width - gap, b.left + gap, b.left + b.width - width - gap),
+      y: clamp(preferred.y === undefined ? b.top + b.height - visibleHeight - gap : preferred.y + offset, b.top + gap, b.top + b.height - visibleHeight - gap),
     }
   }
   const persist = () => {
     if (!config.rememberGeometry) return
-    try { win.localStorage.setItem(geometryKey, JSON.stringify(preferred)) } catch { /* Browser storage policy may forbid saving viewing preferences. */ }
+    try { win.localStorage.setItem(geometryKey, JSON.stringify(preferred)) } catch { /* Storage may be unavailable. */ }
   }
+  const conversation = () => surface?.chat.querySelector('[data-conversation-session], [data-conversation-root]')
+  const belongsToConversation = node => node.closest('[data-conversation-session], [data-conversation-root]') === conversation()
+  const composerSeat = () => [...(surface?.chat.querySelectorAll('[data-composer-seat]') ?? [])].find(belongsToConversation)
+  const editor = () => composer?.card.querySelector('[data-composer-input], textarea') ?? (!composerSeat() ? conversation()?.querySelector('textarea') : null)
+  const focusEditor = () => editor()?.focus({ preventScroll: true })
+  const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
+  const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
+  const popupOpen = () => [...doc.querySelectorAll(popupSelector)].some(node => {
+    if (node.matches(pendingSelector) && surface?.chat.contains(node) && !belongsToConversation(node)) return false
+    if (node.closest('[hidden], [inert], [aria-hidden="true"]')) return false
+    const css = win.getComputedStyle(node)
+    return css.display !== 'none' && css.visibility !== 'hidden'
+  })
   const updateGeometry = () => {
     if (!surface) return
-    if (composer) {
-      collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2)
-      setStyle(surface.chat, '--dsh-fv-collapsed-height', `${collapsedHeight}px`)
-    }
+    const chrome = mode !== 'hidden' && (mode === 'expanded' || !composer || hovered || withinChat(doc.activeElement) || !!drag || popupOpen())
+    surface.chat.toggleAttribute('data-dsh-chat-chrome', chrome)
+    if (composer) collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2) + (chrome ? 36 : 0)
     const b = bounds()
     const g = geometry()
+    setStyle(surface.chat, '--dsh-fv-collapsed-height', `${g.visibleHeight}px`)
     setStyle(surface.frame, '--dsh-fv-content-width', `${b.width}px`)
-    for (const [key, value] of Object.entries(g)) setStyle(surface.chat, `--dsh-fv-${key}`, `${value}px`)
+    for (const key of ['x', 'y', 'width', 'height']) setStyle(surface.chat, `--dsh-fv-${key}`, `${g[key]}px`)
+    // Recovery controls live beside, rather than inside, the inert hidden chat.
+    badge.hidden = mode !== 'hidden'
+    const badgeText = unread ? '聊天 · 有新内容' : '打开聊天'
+    if (badge.textContent !== badgeText) badge.textContent = badgeText
+    badge.setAttribute('aria-label', unread ? '恢复聊天，有新内容' : '恢复聊天')
+    setStyle(badge, 'left', `${g.x + Math.max(0, g.width - 120)}px`)
+    setStyle(badge, 'top', `${g.y + Math.max(0, g.visibleHeight - 36)}px`)
+    setStyle(badge, 'max-width', `${g.width}px`)
+    update.hidden = !unread || mode !== 'compact'
+    setStyle(update, 'left', `${g.x}px`)
+    setStyle(update, 'top', `${Math.max(b.top, g.y - 32)}px`)
+    for (const handle of handles) {
+      const vertical = ['n', 's'].includes(handle.getAttribute('data-dsh-resize-direction'))
+      handle.setAttribute('aria-valuemin', '0')
+      handle.setAttribute('aria-valuemax', String(Math.round(vertical ? b.height : b.width)))
+      handle.setAttribute('aria-valuenow', String(Math.round(vertical ? g.height : g.width)))
+      handle.setAttribute('aria-valuetext', `${Math.round(g.width)} × ${Math.round(g.height)} 像素`)
+    }
+    hide.disabled = !!approvalState
+    hide.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
+    minimize.disabled = !!approvalState
+    const label = minimized ? '展开聊天' : '收起聊天'
+    for (const control of [minimize, title, edge]) {
+      control.setAttribute('aria-expanded', String(!minimized))
+      control.setAttribute('aria-label', control === title ? `${label}：${title.textContent}` : label)
+    }
+    minimize.title = label
+    title.title = title.textContent
+    edge.title = approvalState ? '请先处理会话中的待办提示' : `点击外缘${minimized ? '展开' : '收起'}聊天，拖动移动`
+    surface.chat.toggleAttribute('data-dsh-chat-unread', unread)
+  }
+  const setMode = (next, { focus = false, force = false } = {}) => {
+    if (!surface || (approvalState && next !== 'expanded' && !force)) return
+    const active = doc.activeElement
+    mode = next
+    minimized = mode !== 'expanded'
+    surface.chat.toggleAttribute('data-dsh-chat-minimized', minimized)
+    surface.chat.toggleAttribute('data-dsh-chat-hidden', mode === 'hidden')
+    if (mode === 'hidden') {
+      if (withinChat(active)) active.blur()
+      surface.chat.setAttribute('inert', '')
+      surface.chat.setAttribute('aria-hidden', 'true')
+    } else {
+      for (const key of ['inert', 'aria-hidden']) {
+        const value = savedAccessibility?.[key]
+        if (value === null || value === undefined) surface.chat.removeAttribute(key)
+        else surface.chat.setAttribute(key, value)
+      }
+    }
+    if (mode === 'expanded') unread = false
+    updateGeometry()
+    if (mode === 'hidden') badge.focus({ preventScroll: true })
+    else if (focus || (mode === 'compact' && withinChat(active) && !composer?.seat.contains(active))) focusEditor()
   }
   const returnSplit = () => {
     const button = surface?.panel.querySelector('[data-sidebar-right-mode="push"]') ?? surface?.panel.querySelector('[data-sidebar-right-mode]')
     button?.click()
   }
-  const toggleMinimize = () => {
-    minimized = !minimized
-    surface?.chat.toggleAttribute('data-dsh-chat-minimized', minimized)
-    minimize.setAttribute('aria-label', minimized ? '展开聊天' : '收起聊天')
-    minimize.setAttribute('title', minimized ? '展开聊天' : '收起聊天')
-    minimize.setAttribute('aria-expanded', String(!minimized))
-    edge.setAttribute('aria-label', minimized ? '展开聊天' : '收起聊天')
-    edge.title = minimized ? '点击外缘展开聊天，拖动移动' : '点击外缘收起聊天，拖动移动'
-    edge.setAttribute('aria-expanded', String(!minimized))
-    updateGeometry()
+  const toggleMinimize = () => setMode(mode === 'expanded' ? 'compact' : 'expanded', { focus: mode !== 'expanded' })
+  const resetSize = (position = false) => {
+    const g = geometry()
+    const b = bounds(), gap = Math.min(config.edgeGap, Math.min(b.width, b.height) / 8)
+    const restoredHeight = Math.max(0, Math.min(config.chatHeight, b.height - 2 * gap))
+    const y = mode === 'expanded' ? g.y : g.y + g.visibleHeight - restoredHeight
+    preferred = position ? { width: config.chatWidth, height: config.chatHeight } : { x: g.x, y, width: config.chatWidth, height: config.chatHeight }
+    updateGeometry(); persist()
+  }
+  const clearEdgeClick = () => {
+    if (edgeClickTimer !== null) win.clearTimeout(edgeClickTimer)
+    edgeClickTimer = null
+  }
+  const delayedToggle = event => {
+    clearEdgeClick()
+    if (event.detail === 0) { toggleMinimize(); return }
+    edgeClickTimer = win.setTimeout(() => { edgeClickTimer = null; toggleMinimize() }, 260)
   }
   const pointerDown = event => {
-    if (event.button !== 0 || (event.currentTarget !== edge && event.target.closest('button'))) return
+    if (event.button !== 0 || drag || (event.currentTarget === toolbar && event.target.closest('button'))) return
     event.preventDefault()
+    clearEdgeClick()
     const target = event.currentTarget
-    const g = geometry()
-    drag = { target, pointerId: event.pointerId, resize: target === resize, startX: event.clientX, startY: event.clientY, geometry: g }
-    if (target === edge) suppressEdgeClick = false
+    drag = { target, pointerId: event.pointerId, direction: target.getAttribute('data-dsh-resize-direction'), startX: event.clientX, startY: event.clientY, geometry: geometry(), preferred: { ...preferred }, moved: false }
+    suppressEdgeClick = suppressChromeClick = false
     target.setPointerCapture(event.pointerId)
     surface.frame.setAttribute('data-dsh-fv-dragging', '')
   }
+  const resizedGeometry = (g, direction, dx, dy) => {
+    const b = bounds(), gap = Math.min(config.edgeGap, Math.min(b.width, b.height) / 8)
+    const west = direction.includes('w'), north = direction.includes('n')
+    const maxWidth = west ? g.x + g.width - b.left - gap : b.left + b.width - gap - g.x
+    const maxHeight = north ? g.y + g.height - b.top - gap : b.top + b.height - gap - g.y
+    const width = direction.includes('e') || west ? Math.min(maxWidth, Math.max(280, g.width + (west ? -dx : dx))) : g.width
+    const height = direction.includes('s') || north ? Math.min(maxHeight, Math.max(240, g.height + (north ? -dy : dy))) : g.height
+    return { width, height, x: g.x + (west ? g.width - width : 0), y: g.y - g.offset + (north ? g.height - height : 0) }
+  }
   const pointerMove = event => {
     if (!drag || event.pointerId !== drag.pointerId) return
-    const dx = event.clientX - drag.startX
-    const dy = event.clientY - drag.startY
-    if (drag.target === edge && Math.hypot(dx, dy) > 4) suppressEdgeClick = true
-    const offset = minimized && composer ? drag.geometry.height - collapsedHeight : 0
-    preferred = drag.resize
-      ? { ...drag.geometry, width: drag.geometry.width + dx, height: drag.geometry.height + dy }
-      : { ...drag.geometry, x: drag.geometry.x + dx, y: drag.geometry.y + dy - offset }
+    const dx = event.clientX - drag.startX, dy = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) <= 4) return
+    drag.moved = true
+    suppressEdgeClick = suppressChromeClick = true
+    const g = drag.geometry
+    preferred = drag.direction ? resizedGeometry(g, drag.direction, dx, dy) : { width: g.width, height: g.height, x: g.x + dx, y: g.y + dy - g.offset }
     const constrained = geometry()
-    preferred = { ...constrained, y: constrained.y - offset }
+    preferred = { width: constrained.width, height: constrained.height, x: constrained.x, y: constrained.y - constrained.offset }
     updateGeometry()
   }
-  const pointerEnd = event => {
-    if (!drag || event.pointerId !== drag.pointerId) return
+  const finishPointer = (event, cancel = false) => {
+    if (!drag || (event?.pointerId !== undefined && event.pointerId !== drag.pointerId)) return
     const held = drag
     drag = null
     surface?.frame.removeAttribute('data-dsh-fv-dragging')
+    if (cancel) preferred = held.preferred
+    else if (held.moved && !held.direction) {
+      const b = bounds(), g = geometry(), gap = Math.min(config.edgeGap, Math.min(b.width, b.height) / 8)
+      const threshold = 24
+      let x = g.x, y = g.y
+      const right = b.left + b.width - g.width - gap, bottom = b.top + b.height - g.visibleHeight - gap
+      if (Math.abs(x - b.left - gap) <= threshold) x = b.left + gap
+      if (Math.abs(x - right) <= threshold) x = right
+      if (Math.abs(y - b.top - gap) <= threshold) y = b.top + gap
+      if (Math.abs(y - bottom) <= threshold) y = bottom
+      preferred = { width: g.width, height: g.height, x, y: y - g.offset }
+    }
     if (held.target.hasPointerCapture(held.pointerId)) held.target.releasePointerCapture(held.pointerId)
-    persist()
+    updateGeometry()
+    if (!cancel && held.moved) persist()
   }
+  const pointerEnd = event => finishPointer(event)
   const button = (label, marker, path, handler) => {
     const element = doc.createElement('button')
     element.type = 'button'
     element.setAttribute('aria-label', label)
     element.title = label
     element.setAttribute(marker, '')
-    element.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${path}"/></svg>`
+    // Reuse the plugin's existing glyphs; new actions use plain text labels.
+    if (path) element.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${path}"/></svg>`
     element.addEventListener('click', handler)
     return element
+  }
+  const moveWithKeyboard = event => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) || approvalState && mode === 'hidden') return
+    event.preventDefault(); event.stopPropagation()
+    const g = geometry(), step = event.shiftKey ? 48 : 16
+    preferred = { width: g.width, height: g.height, x: g.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0), y: g.y - g.offset + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) }
+    const result = geometry()
+    preferred.x = result.x; preferred.y = result.y - result.offset
+    updateGeometry(); persist()
   }
   const buildChrome = () => {
     toolbar = doc.createElement('div')
     toolbar.setAttribute('data-dsh-full-view-toolbar', '')
     toolbar.setAttribute('role', 'toolbar')
     toolbar.setAttribute('aria-label', '聊天小窗')
-    title = doc.createElement('span')
-    title.setAttribute('data-dsh-full-view-title', '')
+    title = button('展开聊天', 'data-dsh-full-view-title', null, delayedToggle)
     title.textContent = '聊天'
     minimize = button('收起聊天', 'data-dsh-minimize-chat', 'M5 12h14', toggleMinimize)
-    minimize.setAttribute('aria-expanded', 'true')
-    toolbar.append(title, minimize, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit))
-    edge = doc.createElement('button')
-    edge.type = 'button'
-    edge.setAttribute('data-dsh-full-view-edge', '')
-    edge.setAttribute('aria-label', '收起聊天')
-    edge.setAttribute('aria-expanded', 'true')
-    edge.title = '点击外缘收起聊天，拖动移动'
+    hide = button('隐藏聊天，保留恢复入口', 'data-dsh-hide-chat', null, () => setMode('hidden'))
+    hide.textContent = '×'
+    const grip = button('移动聊天小窗：方向键移动，Shift 加大步长', 'data-dsh-move-chat', null, () => {})
+    grip.textContent = '⠿'
+    grip.addEventListener('keydown', moveWithKeyboard)
+    toolbar.append(minimize, title, hide, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
+    toolbar.addEventListener('click', event => {
+      if (event.target.closest('button')) return
+      if (suppressChromeClick && event.detail !== 0) { suppressChromeClick = false; return }
+      delayedToggle(event)
+    })
+    edge = button('展开聊天', 'data-dsh-full-view-edge', null, event => {
+      if (suppressEdgeClick && event.detail !== 0) { suppressEdgeClick = false; return }
+      toggleMinimize()
+    })
     for (const side of ['top', 'right', 'bottom', 'left']) {
       const segment = doc.createElement('span')
       segment.setAttribute('data-dsh-edge-side', side)
       segment.setAttribute('aria-hidden', 'true')
       edge.append(segment)
     }
-    edge.addEventListener('click', () => {
-      if (suppressEdgeClick) { suppressEdgeClick = false; return }
-      toggleMinimize()
+    handles = ['se', 'w', 'e', 'n', 's', 'nw', 'ne', 'sw'].map(direction => {
+      const handle = doc.createElement('div')
+      handle.setAttribute('data-dsh-full-view-resize', '')
+      handle.setAttribute('data-dsh-resize-direction', direction)
+      handle.setAttribute('role', 'separator')
+      handle.setAttribute('aria-orientation', direction === 'n' || direction === 's' ? 'horizontal' : 'vertical')
+      handle.setAttribute('aria-label', `调整聊天${direction === 'w' || direction === 'e' ? '宽度' : '大小'}，双击恢复默认尺寸`)
+      handle.title = '拖动调整大小，双击恢复默认尺寸'
+      handle.tabIndex = 0
+      handle.addEventListener('dblclick', () => { clearEdgeClick(); resetSize() })
+      handle.addEventListener('click', event => {
+        if (suppressEdgeClick && event.detail !== 0) { suppressEdgeClick = false; return }
+        if (direction.length !== 1) return
+        // Distinguish a single edge click from a double click that resets size.
+        delayedToggle(event)
+      })
+      handle.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+        event.preventDefault(); event.stopPropagation()
+        const g = geometry(), step = event.shiftKey ? 48 : 16
+        const dw = event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0
+        const dh = mode !== 'expanded' ? 0 : event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0
+        preferred = resizedGeometry(g, direction, direction.includes('w') ? -dw : dw, direction.includes('n') ? -dh : dh)
+        updateGeometry(); persist()
+      })
+      return handle
     })
-    resize = doc.createElement('div')
-    resize.setAttribute('data-dsh-full-view-resize', '')
-    resize.setAttribute('role', 'separator')
-    resize.setAttribute('aria-label', '调整聊天小窗大小，双击恢复默认尺寸')
-    resize.title = '拖动调整大小，双击恢复默认尺寸'
-    resize.tabIndex = 0
-    resize.addEventListener('dblclick', () => {
-      preferred = { ...geometry(), width: config.chatWidth, height: config.chatHeight }
-      updateGeometry(); persist()
+    resize = handles[0]
+    badge = button('恢复聊天', 'data-dsh-restore-chat', null, event => {
+      if (suppressChromeClick && event.detail !== 0) { suppressChromeClick = false; return }
+      setMode('compact', { focus: true })
     })
-    resize.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
-      event.preventDefault()
-      const g = geometry()
-      const step = event.shiftKey ? 48 : 16
-      preferred = { ...g, width: g.width + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0), height: g.height + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) }
-      updateGeometry(); persist()
-    })
-    for (const element of [toolbar, resize, edge]) {
+    badge.addEventListener('keydown', moveWithKeyboard)
+    update = button('有新内容，展开聊天查看', 'data-dsh-show-update', null, () => setMode('expanded', { focus: true }))
+    update.textContent = '有新内容 · 查看'
+    update.setAttribute('aria-live', 'polite')
+    for (const element of [toolbar, edge, ...handles, badge, grip]) {
       element.addEventListener('pointerdown', pointerDown)
       element.addEventListener('pointermove', pointerMove)
       element.addEventListener('pointerup', pointerEnd)
-      element.addEventListener('pointercancel', pointerEnd)
-      element.addEventListener('lostpointercapture', pointerEnd)
+      element.addEventListener('pointercancel', event => finishPointer(event, true))
+      element.addEventListener('lostpointercapture', event => finishPointer(event, true))
     }
-    toolbar.addEventListener('dblclick', event => {
-      if (event.target.closest('button')) return
-      preferred = { width: config.chatWidth, height: config.chatHeight }
-      updateGeometry(); persist()
-    })
+    const resetOnDoubleClick = event => {
+      if (event.target.closest('button') && event.target !== title) return
+      clearEdgeClick(); resetSize(true)
+    }
+    toolbar.addEventListener('dblclick', resetOnDoubleClick)
   }
   const clearComposer = () => {
     if (composer) resizeObserver?.unobserve?.(composer.seat)
@@ -213,7 +356,7 @@ export function installFullView(doc, input = {}) {
     surface?.chat.removeAttribute('data-dsh-chat-composer')
   }
   const syncComposer = () => {
-    const seat = surface.chat.querySelector('[data-composer-seat]')
+    const seat = composerSeat()
     const card = seat?.querySelector('[data-composer-card]')
     const scroll = card?.querySelector('[data-input-scroll]')
     const row = scroll?.nextElementSibling
@@ -240,21 +383,48 @@ export function installFullView(doc, input = {}) {
   const resizeObserver = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => schedule()) : null
   const restore = () => {
     if (!surface) return
-    if (drag) pointerEnd({ pointerId: drag.pointerId })
+    if (drag) finishPointer(null, true)
+    clearEdgeClick()
     clearComposer()
     resizeObserver?.disconnect()
     surface.frame.removeAttribute('data-dsh-full-view')
     surface.frame.style.removeProperty('--dsh-fv-content-width')
-    surface.chat.removeAttribute('data-dsh-floating-chat')
-    surface.chat.removeAttribute('data-dsh-chat-minimized')
-    surface.chat.style.removeProperty('--dsh-fv-collapsed-height')
-    for (const key of ['x', 'y', 'width', 'height']) surface.chat.style.removeProperty(`--dsh-fv-${key}`)
+    for (const marker of ['floating-chat', 'chat-minimized', 'chat-hidden', 'chat-chrome', 'chat-unread']) surface.chat.removeAttribute(`data-dsh-${marker}`)
+    for (const key of ['inert', 'aria-hidden']) {
+      const value = savedAccessibility?.[key]
+      if (value === null || value === undefined) surface.chat.removeAttribute(key)
+      else surface.chat.setAttribute(key, value)
+    }
+    for (const key of ['x', 'y', 'width', 'height', 'collapsed-height']) surface.chat.style.removeProperty(`--dsh-fv-${key}`)
     header?.removeAttribute('data-dsh-floating-header')
-    toolbar?.remove(); resize?.remove(); edge?.remove()
-    toolbar = resize = edge = title = minimize = header = null
+    surface.chat.removeEventListener('pointerenter', enterHover)
+    surface.chat.removeEventListener('pointerleave', leaveHover)
+    const focusWasChrome = [badge, update, toolbar, ...handles].some(node => node?.contains(doc.activeElement))
+    toolbar?.remove(); edge?.remove(); badge?.remove(); update?.remove()
+    for (const handle of handles) handle.remove()
+    if (focusWasChrome) focusEditor()
+    toolbar = resize = edge = title = minimize = header = badge = update = hide = null
+    handles = []
     surface = null
-    minimized = false
+    mode = 'expanded'; minimized = hovered = unread = false
+    approvalState = savedAccessibility = sessionId = null
   }
+  const syncApproval = () => {
+    const seat = composerSeat()
+    // Pending interactions replace the native composer. Trajectory overlays do not.
+    const blocked = [...surface.chat.querySelectorAll(pendingSelector)].some(belongsToConversation) || !!(seat?.childElementCount && !composer)
+    if (blocked && !approvalState) {
+      const previous = mode
+      approvalState = { previous }
+      setMode('expanded', { force: true })
+    } else if (!blocked && approvalState) {
+      const previous = approvalState.previous
+      approvalState = null
+      setMode(previous, { force: true })
+    }
+  }
+  const enterHover = () => { hovered = true; updateGeometry() }
+  const leaveHover = () => { hovered = false; updateGeometry() }
   const sync = () => {
     raf = null
     if (disposed) return
@@ -263,19 +433,27 @@ export function installFullView(doc, input = {}) {
       restore()
       if (!next) return
       surface = next
+      savedAccessibility = Object.fromEntries(['inert', 'aria-hidden'].map(key => [key, surface.chat.getAttribute(key)]))
+      sessionId = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
       buildChrome()
+      surface.frame.append(badge, update)
+      surface.chat.addEventListener('pointerenter', enterHover)
+      surface.chat.addEventListener('pointerleave', leaveHover)
       surface.frame.setAttribute('data-dsh-full-view', '')
       surface.chat.setAttribute('data-dsh-floating-chat', '')
       syncComposer()
-      if (composer) toggleMinimize()
+      setMode(composerSeat() ? 'compact' : 'expanded')
       resizeObserver?.observe(surface.frame)
       if (surface.sidebar) resizeObserver?.observe(surface.sidebar)
     }
     if (!surface) return
     if (toolbar.parentElement !== surface.chat) surface.chat.prepend(toolbar)
-    if (resize.parentElement !== surface.chat) surface.chat.append(resize)
+    for (const handle of handles) if (handle.parentElement !== surface.chat) surface.chat.append(handle)
     if (edge.parentElement !== surface.chat) surface.chat.append(edge)
     syncComposer()
+    const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
+    if (nextSession !== sessionId) { sessionId = nextSession; unread = false; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true }) }
+    syncApproval()
     const nextHeader = surface.chat.querySelector('[data-conversation-header-leading]')?.closest('header')
     if (nextHeader !== header) { header?.removeAttribute('data-dsh-floating-header'); header = nextHeader; header?.setAttribute('data-dsh-floating-header', '') }
     const currentTitle = doc.title.replace(/\s*[—–-]\s*DeepSeek Harness\s*$/, '') || '聊天'
@@ -285,17 +463,52 @@ export function installFullView(doc, input = {}) {
   function schedule() {
     if (!disposed && raf === null) raf = win.requestAnimationFrame(sync)
   }
+  const outsidePointer = event => {
+    if (!surface || mode !== 'expanded' || drag || approvalState || withinChat(event.target) || event.target === update || popupOpen()) return
+    setMode('compact')
+  }
+  const focusChanged = () => { if (surface) updateGeometry() }
+  const keydown = event => {
+    if (!surface || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return
+    if (drag) { event.preventDefault(); event.stopPropagation(); finishPointer(null, true); return }
+    if (mode !== 'expanded' || approvalState || popupOpen() || !withinChat(event.target)) return
+    event.preventDefault(); event.stopPropagation()
+    setMode('compact', { focus: true })
+  }
+  const windowBlur = () => {
+    if (drag) finishPointer(null, true)
+    // Iframe clicks do not bubble into the parent document.
+    if (surface && mode === 'expanded' && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !popupOpen()) setMode('compact')
+  }
   const observer = new win.MutationObserver(records => {
-    if (records.some(record => record.type === 'childList' || !record.attributeName.startsWith('data-dsh-'))) schedule()
+    if (surface && mode !== 'expanded' && records.some(record => {
+      const target = record.target.nodeType === 1 ? record.target : record.target.parentElement
+      return (record.type === 'childList' || record.type === 'characterData') && withinChat(target) && belongsToConversation(target) && !!target.closest('[data-slot="conversation.session"], [data-conversation-region="messages"]')
+    })) unread = true
+    if (records.some(record => record.type === 'childList' || record.type === 'characterData' || !record.attributeName.startsWith('data-dsh-'))) schedule()
   })
-  observer.observe(doc.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-rightbar-fullscreen', 'data-sidebar-right-panel', 'data-sidebar-right-open', 'data-conversation-session', 'hidden', 'data-sidebar-collapsed'] })
+  observer.observe(doc.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-rightbar-fullscreen', 'data-sidebar-right-panel', 'data-sidebar-right-open', 'data-conversation-session', 'data-approval-key', 'data-question-key', 'data-plan-review-key', 'hidden', 'data-sidebar-collapsed'] })
   win.addEventListener('resize', schedule)
+  win.addEventListener('blur', windowBlur)
+  win.visualViewport?.addEventListener('resize', schedule)
+  win.visualViewport?.addEventListener('scroll', schedule)
+  doc.addEventListener('pointerdown', outsidePointer, true)
+  doc.addEventListener('focusin', focusChanged)
+  doc.addEventListener('focusout', schedule)
+  doc.addEventListener('keydown', keydown)
   sync()
   const dispose = () => {
     if (disposed) return
     disposed = true
     observer.disconnect()
     win.removeEventListener('resize', schedule)
+    win.removeEventListener('blur', windowBlur)
+    win.visualViewport?.removeEventListener('resize', schedule)
+    win.visualViewport?.removeEventListener('scroll', schedule)
+    doc.removeEventListener('pointerdown', outsidePointer, true)
+    doc.removeEventListener('focusin', focusChanged)
+    doc.removeEventListener('focusout', schedule)
+    doc.removeEventListener('keydown', keydown)
     if (raf !== null) win.cancelAnimationFrame(raf)
     restore()
     sheet.remove()

@@ -212,3 +212,251 @@ test('卸载插件清理样式、工具栏和几何标记，保留宿主原有�
   assert.equal(f.frame.hasAttribute('data-rightbar-fullscreen'), true)
   f.dom.window.close()
 })
+
+// These regressions exercise user actions on the original host DOM, not copied UI.
+test('输入焦点揭示紧凑标题栏，隐藏后可恢复草稿，返回分栏清理恢复入口', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const draft = f.document.getElementById('draft'); draft.focus()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-chrome'), true)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.querySelector('[data-dsh-hide-chat]').click()
+    assert.equal(displayed(draft, f.dom.window), false)
+    const restore = f.document.querySelector('[data-dsh-restore-chat]')
+    assert.equal(displayed(restore, f.dom.window), true)
+    restore.click()
+    assert.equal(displayed(draft, f.dom.window), true)
+    assert.equal(f.document.activeElement, draft)
+    assert.equal(draft.textContent, '正在编辑的草稿')
+    f.document.querySelector('[data-dsh-return-split]').click(); await settle()
+    assert.equal(f.document.querySelector('[data-dsh-restore-chat]'), null)
+    assert.equal(f.chat.hasAttribute('inert'), false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('外部点击与 Esc 收起，原生弹出菜单和输入法组合键不干扰', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  const down = node => node.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+  const esc = (node, options = {}) => node.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...options }))
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
+    const menu = f.document.createElement('div'); menu.setAttribute('role', 'listbox'); f.document.body.append(menu)
+    down(menu); esc(menu)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    menu.remove()
+    esc(f.document.getElementById('draft'), { isComposing: true })
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    esc(f.document.getElementById('draft'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.querySelector('[data-dsh-full-view-edge]').click(); down(f.document.getElementById('sidebar'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('审批覆盖层在紧凑或隐藏时出现会展开，处理完成后恢复原状态', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const approval = f.document.createElement('section'); approval.setAttribute('data-approval-key', 'approval-1'); approval.innerHTML = '<button>批准执行</button>'
+    f.document.querySelector('[data-composer-card]').prepend(approval); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    f.document.querySelector('[data-dsh-hide-chat]').click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    approval.remove(); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.querySelector('[data-dsh-hide-chat]').click()
+    f.document.querySelector('[data-composer-card]').prepend(approval); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    approval.remove(); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('收起时新会话内容出现提供查看入口，编辑草稿不会产生提醒', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    f.document.getElementById('draft').textContent += '草稿'; await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-unread'), false)
+    f.document.getElementById('messages').textContent += '新增回复'; await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-unread'), true)
+    f.document.querySelector('[data-dsh-show-update]').click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-unread'), false)
+    assert.match(f.document.getElementById('messages').textContent, /新增回复/)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+function pointer(f, target, type, x, y) {
+  const event = new f.dom.window.MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
+  Object.defineProperty(event, 'pointerId', { value: 1 }); target.dispatchEvent(event)
+}
+function capture(target) {
+  let held = false; target.setPointerCapture = () => { held = true }; target.hasPointerCapture = () => held; target.releasePointerCapture = () => { held = false }
+}
+
+test('拖动 Esc 或失去窗口焦点取消，拖动结束吸附边缘且不误展开', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); const edge = f.document.querySelector('[data-dsh-full-view-edge]'); capture(edge)
+    const x = f.chat.style.getPropertyValue('--dsh-fv-x')
+    pointer(f, edge, 'pointerdown', 800, 740); pointer(f, edge, 'pointermove', 620, 700)
+    f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-x'), x)
+    assert.equal(f.frame.hasAttribute('data-dsh-fv-dragging'), false)
+    pointer(f, edge, 'pointerdown', 800, 740); pointer(f, edge, 'pointermove', 620, 700)
+    f.dom.window.dispatchEvent(new f.dom.window.Event('blur'))
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-x'), x)
+    pointer(f, edge, 'pointerdown', 800, 740); pointer(f, edge, 'pointermove', 337, 740); pointer(f, edge, 'pointerup', 337, 740); edge.dispatchEvent(new f.dom.window.MouseEvent('click', { bubbles: true, detail: 1 }))
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-x'), '300px')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('左侧缩放保持右边锚点，紧凑状态可调整宽度，卸载后不再响应快捷键', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); const left = f.document.querySelector('[data-dsh-resize-direction="w"]'); capture(left)
+    const right = parseFloat(f.chat.style.getPropertyValue('--dsh-fv-x')) + parseFloat(f.chat.style.getPropertyValue('--dsh-fv-width'))
+    pointer(f, left, 'pointerdown', 780, 740); pointer(f, left, 'pointermove', 730, 740); pointer(f, left, 'pointerup', 730, 740)
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), '450px')
+    assert.equal(parseFloat(f.chat.style.getPropertyValue('--dsh-fv-x')) + 450, right)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    dispose()
+    f.document.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    assert.equal(f.document.querySelector('[data-dsh-restore-chat]'), null)
+    assert.equal(f.frame.hasAttribute('data-dsh-fv-dragging'), false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('轨迹视图的 composer-overlay 标记不被误判为待审批', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.document.getElementById('messages').setAttribute('data-conversation-composer-overlay', '')
+    f.enter(); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.getElementById('sidebar').dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+
+test('提问和计划确认替换整个原生输入框时仍保持可见，处理完恢复紧凑输入', async () => {
+  for (const marker of ['data-question-key', 'data-plan-review-key']) {
+    const f = composerFixture(); const dispose = install(f.document)
+    try {
+      f.enter(); await settle()
+      const seat = f.document.querySelector('[data-composer-seat]'); const native = seat.firstElementChild
+      const pending = f.document.createElement('div'); pending.setAttribute(marker, 'p1'); pending.textContent = '请确认'
+      seat.replaceChildren(pending); await settle()
+      assert.equal(displayed(pending, f.dom.window), true)
+      assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+      seat.replaceChildren(native); await settle()
+      assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+      assert.equal(displayed(f.document.getElementById('draft'), f.dom.window), true)
+    } finally { dispose(); f.dom.window.close() }
+  }
+})
+
+test('查看更新后焦点返回原编辑器，键盘切换不被上一次拖动屏蔽', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    f.document.getElementById('messages').textContent += '新内容'; await settle()
+    const update = f.document.querySelector('[data-dsh-show-update]'); update.focus(); update.click()
+    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const edge = f.document.querySelector('[data-dsh-full-view-edge]'); capture(edge)
+    pointer(f, edge, 'pointerdown', 800, 740); pointer(f, edge, 'pointermove', 700, 740); pointer(f, edge, 'pointerup', 700, 740)
+    edge.click() // keyboard/native .click() has detail 0, unlike a pointer click.
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('视觉视口变小时小窗保持可见，恢复视口后保留用户的尺寸偏好', async () => {
+  const f = composerFixture(); const viewport = new f.dom.window.EventTarget()
+  Object.assign(viewport, { offsetLeft: 0, offsetTop: 0, width: 1200, height: 800 })
+  Object.defineProperty(f.dom.window, 'visualViewport', { value: viewport })
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
+    Object.assign(viewport, { width: 660, height: 420 }); viewport.dispatchEvent(new f.dom.window.Event('resize')); await settle()
+    const read = name => parseFloat(f.chat.style.getPropertyValue('--dsh-fv-' + name))
+    assert.ok(read('x') >= 280 && read('x') + read('width') <= 660)
+    assert.ok(read('y') >= 0 && read('y') + read('height') <= 420)
+    Object.assign(viewport, { width: 1200, height: 800 }); viewport.dispatchEvent(new f.dom.window.Event('resize')); await settle()
+    assert.equal(read('width'), 400); assert.equal(read('height'), 540)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('角落第一次点击不会先收起，双击能在原位置恢复尺寸', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
+    const corner = f.document.querySelector('[data-dsh-resize-direction="se"]')
+    corner.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    corner.dispatchEvent(new f.dom.window.MouseEvent('click', { bubbles: true, detail: 1 }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    corner.dispatchEvent(new f.dom.window.MouseEvent('dblclick', { bubbles: true }))
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), '400px')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('标题栏双击复位不会在第一次点击时移动目标，卸载取消待处理单击', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); const title = f.document.querySelector('[data-dsh-full-view-title]')
+    title.dispatchEvent(new f.dom.window.MouseEvent('click', { bubbles: true, detail: 1 }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    title.dispatchEvent(new f.dom.window.MouseEvent('dblclick', { bubbles: true }))
+    await new Promise(resolve => setTimeout(resolve, 300))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    title.dispatchEvent(new f.dom.window.MouseEvent('click', { bubbles: true, detail: 1 })); dispose()
+    await new Promise(resolve => setTimeout(resolve, 300))
+    assert.equal(f.document.querySelector('[data-dsh-full-view-toolbar]'), null)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('左缘键盘缩放保持右端位置，窄视口约束不会改变另一端锚点', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const left = f.document.querySelector('[data-dsh-resize-direction="w"]')
+    f.document.querySelector('[data-dsh-move-chat]').dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    const read = key => parseFloat(f.chat.style.getPropertyValue('--dsh-fv-' + key))
+    const right = read('x') + read('width')
+    left.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    assert.equal(read('width'), 416)
+    assert.equal(read('x') + read('width'), right)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('内嵌子会话不会抢走当前会话输入框或触发当前会话待办', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    const nested = f.document.createElement('div'); nested.setAttribute('data-conversation-session', 'child')
+    nested.innerHTML = '<div data-composer-seat><div data-composer-card><div data-input-scroll><div data-composer-input contenteditable="true">子会话</div></div><div><div></div><div></div></div></div><div data-question-key="child-question">子会话提问</div></div>'
+    f.document.querySelector('[data-conversation-region="messages"]').prepend(nested)
+    f.enter(); await settle()
+    const draft = f.document.getElementById('draft'); draft.focus()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.querySelector('[data-dsh-hide-chat]').click(); f.document.querySelector('[data-dsh-restore-chat]').click()
+    assert.equal(f.document.activeElement, draft)
+    assert.equal(f.document.querySelector('[data-dsh-full-view-composer-card]').contains(draft), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('紧凑状态双击边缘恢复默认尺寸时保持输入条底部位置', async () => {
+  const f = composerFixture(); f.dom.window.localStorage.setItem('dsh.full-view.geometry.v1', JSON.stringify({x:400,y:80,width:600,height:640}))
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); f.document.getElementById('draft').focus()
+    const bottom = () => parseFloat(f.chat.style.getPropertyValue('--dsh-fv-y')) + parseFloat(f.chat.style.getPropertyValue('--dsh-fv-collapsed-height'))
+    const previous = bottom()
+    f.document.querySelector('[data-dsh-resize-direction="w"]').dispatchEvent(new f.dom.window.MouseEvent('dblclick', { bubbles: true }))
+    assert.equal(bottom(), previous)
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), '400px')
+  } finally { dispose(); f.dom.window.close() }
+})
