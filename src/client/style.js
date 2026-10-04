@@ -44,7 +44,7 @@ export const style = `
   background: var(--dsw-alias-bg-base, #fff); font: 12px/1.4 system-ui, sans-serif;
   transition: opacity 160ms ease, display 160ms allow-discrete;
 }
-[data-dsh-full-view-toolbar] [data-dsh-full-view-title] { width: auto; justify-content: flex-start; text-align: left; font: inherit; color: inherit; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+[data-dsh-full-view-toolbar] [data-dsh-full-view-title] { cursor: grab; width: auto; justify-content: flex-start; text-align: left; font: inherit; color: inherit; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 [data-dsh-full-view-toolbar] button {
   flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
   background: transparent; border: 0; border-radius: 6px; cursor: pointer; color: var(--dsw-alias-label-secondary, #666);

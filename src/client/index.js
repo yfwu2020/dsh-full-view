@@ -46,6 +46,8 @@ export function installFullView(doc, input = {}, activity = null) {
   let sessionId = null
   let suppressChromeClick = false
   let edgeClickTimer = null
+  let idleTimer = null
+  let composing = false
   let mode = 'expanded'
   let edge = null
   let composer = null
@@ -123,6 +125,30 @@ export function installFullView(doc, input = {}, activity = null) {
     }
     return true
   })
+  const clearIdle = () => {
+    if (idleTimer !== null) win.clearTimeout(idleTimer)
+    idleTimer = null
+  }
+  const canRecycle = () => surface && mode === 'compact' && composer && config.compactIdleSeconds > 0 && !approvalState && !drag && !composing && !popupOpen()
+  // Mutation/activity refreshes maintain an existing deadline; only user input resets it.
+  const syncIdle = () => {
+    if (!canRecycle()) { clearIdle(); return }
+    if (idleTimer !== null) return
+    idleTimer = win.setTimeout(() => {
+      idleTimer = null
+      if (canRecycle()) setMode('hidden', { focusRecovery: false })
+    }, config.compactIdleSeconds * 1000)
+  }
+  const userActivity = event => {
+    if (mode !== 'compact' || !withinChat(event.target)) return
+    clearIdle(); syncIdle()
+  }
+  const inputChanged = event => { userActivity(event); schedule() }
+  const compositionChanged = event => {
+    if (!withinChat(event.target)) return
+    composing = event.type === 'compositionstart'
+    clearIdle(); syncIdle(); schedule()
+  }
   const updateGeometry = () => {
     if (!surface) return
     const chrome = mode === 'expanded' || (mode === 'compact' && !composer)
@@ -147,16 +173,16 @@ export function installFullView(doc, input = {}, activity = null) {
     minimize.disabled = !!approvalState
     minimize.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
     const label = minimized ? '展开聊天' : '收起聊天'
-    for (const control of [title, edge]) {
-      control.setAttribute('aria-expanded', String(!minimized))
-      control.setAttribute('aria-label', control === title ? `${label}：${title.textContent}` : label)
-    }
-    title.title = title.textContent
+    if (edge.getAttribute('aria-expanded') !== String(!minimized)) edge.setAttribute('aria-expanded', String(!minimized))
+    edge.setAttribute('aria-label', label)
+    title.setAttribute('aria-label', `移动聊天小窗：${title.textContent}，方向键移动`)
+    title.removeAttribute('title')
     edge.title = approvalState ? '请先处理会话中的待办提示' : `点击外缘${minimized ? '展开' : '收起'}聊天，拖动移动`
   }
-  const setMode = (next, { focus = false, force = false } = {}) => {
+  const setMode = (next, { focus = false, force = false, focusRecovery = true } = {}) => {
     if (!surface || (approvalState && next !== 'expanded' && !force)) return
     const active = doc.activeElement
+    clearIdle()
     mode = next
     minimized = mode !== 'expanded'
     surface.chat.toggleAttribute('data-dsh-chat-minimized', minimized)
@@ -173,8 +199,9 @@ export function installFullView(doc, input = {}, activity = null) {
       }
     }
     updateGeometry()
-    if (mode === 'hidden') badge.focus({ preventScroll: true })
+    if (mode === 'hidden' && focusRecovery) badge.focus({ preventScroll: true })
     else if (focus || (mode === 'compact' && withinChat(active) && !composer?.seat.contains(active))) focusEditor()
+    syncIdle()
   }
   const returnSplit = () => {
     const button = surface?.panel.querySelector('[data-sidebar-right-mode="push"]') ?? surface?.panel.querySelector('[data-sidebar-right-mode]')
@@ -205,6 +232,7 @@ export function installFullView(doc, input = {}, activity = null) {
     const target = event.currentTarget
     drag = { target, pointerId: event.pointerId, direction: target.getAttribute('data-dsh-resize-direction'), startX: event.clientX, startY: event.clientY, geometry: geometry(), preferred: { ...preferred }, moved: false }
     suppressEdgeClick = suppressChromeClick = false
+    syncIdle()
     target.setPointerCapture(event.pointerId)
     surface.frame.setAttribute('data-dsh-fv-dragging', '')
   }
@@ -249,6 +277,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (held.target.hasPointerCapture(held.pointerId)) held.target.releasePointerCapture(held.pointerId)
     updateGeometry()
     if (!cancel && held.moved) persist()
+    clearIdle(); syncIdle()
   }
   const pointerEnd = event => finishPointer(event)
   const button = (label, marker, path, handler) => {
@@ -276,18 +305,14 @@ export function installFullView(doc, input = {}, activity = null) {
     toolbar.setAttribute('data-dsh-full-view-toolbar', '')
     toolbar.setAttribute('role', 'toolbar')
     toolbar.setAttribute('aria-label', '聊天小窗')
-    title = button('展开聊天', 'data-dsh-full-view-title', null, delayedToggle)
+    title = button('移动聊天小窗', 'data-dsh-full-view-title', null, () => {})
+    title.addEventListener('keydown', moveWithKeyboard)
     title.textContent = '聊天'
     minimize = button('隐藏聊天，保留恢复入口', 'data-dsh-minimize-chat', 'M5 12h14', () => setMode('hidden'))
     const grip = button('移动聊天小窗：方向键移动，Shift 加大步长', 'data-dsh-move-chat', null, () => {})
     grip.textContent = '⠿'
     grip.addEventListener('keydown', moveWithKeyboard)
     toolbar.append(minimize, title, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
-    toolbar.addEventListener('click', event => {
-      if (event.target.closest('button')) return
-      if (suppressChromeClick && event.detail !== 0) { suppressChromeClick = false; return }
-      delayedToggle(event)
-    })
     edge = button('展开聊天', 'data-dsh-full-view-edge', null, event => {
       if (suppressEdgeClick && event.detail !== 0) { suppressEdgeClick = false; return }
       toggleMinimize()
@@ -344,7 +369,7 @@ export function installFullView(doc, input = {}, activity = null) {
     // Do not announce each second to assistive technology.
     processing.setAttribute('aria-live', 'off')
     processing.hidden = true
-    for (const element of [toolbar, edge, ...handles, badge, grip]) {
+    for (const element of [toolbar, title, edge, ...handles, badge, grip]) {
       element.addEventListener('pointerdown', pointerDown)
       element.addEventListener('pointermove', pointerMove)
       element.addEventListener('pointerup', pointerEnd)
@@ -438,6 +463,8 @@ export function installFullView(doc, input = {}, activity = null) {
     if (!surface) return
     if (drag) finishPointer(null, true)
     clearEdgeClick()
+    clearIdle()
+    composing = false
     stopClock()
     activity?.setSession(null)
     clearComposer()
@@ -501,7 +528,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (edge.parentElement !== surface.chat) surface.chat.append(edge)
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
-    if (nextSession !== sessionId) { sessionId = nextSession; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true }) }
+    if (nextSession !== sessionId) { composing = false; sessionId = nextSession; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true }) }
     syncApproval()
     syncActivity()
     const nextHeader = surface.chat.querySelector('[data-conversation-header-leading]')?.closest('header')
@@ -509,6 +536,7 @@ export function installFullView(doc, input = {}, activity = null) {
     const currentTitle = doc.title.replace(/\s*[—–-]\s*DeepSeek Harness\s*$/, '') || '聊天'
     if (title.textContent !== currentTitle) title.textContent = currentTitle
     updateGeometry()
+    syncIdle()
   }
   function schedule() {
     if (!disposed && raf === null) raf = win.requestAnimationFrame(sync)
@@ -539,7 +567,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const observer = new win.MutationObserver(records => {
     if (records.some(record => record.type === 'childList' || record.type === 'characterData' || !record.attributeName.startsWith('data-dsh-'))) schedule()
   })
-  observer.observe(doc.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-rightbar-fullscreen', 'data-sidebar-right-panel', 'data-sidebar-right-open', 'data-conversation-session', 'data-approval-key', 'data-question-key', 'data-plan-review-key', 'hidden', 'data-sidebar-collapsed'] })
+  observer.observe(doc.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-rightbar-fullscreen', 'data-sidebar-right-panel', 'data-sidebar-right-open', 'data-conversation-session', 'data-approval-key', 'data-question-key', 'data-plan-review-key', 'hidden', 'data-sidebar-collapsed', 'aria-hidden', 'aria-expanded', 'inert', 'style', 'class'] })
   observer.observe(doc.head, { childList: true, subtree: true, characterData: true })
   win.addEventListener('resize', schedule)
   win.addEventListener('blur', windowBlur)
@@ -548,7 +576,9 @@ export function installFullView(doc, input = {}, activity = null) {
   doc.addEventListener('pointerdown', outsidePointer, true)
   doc.addEventListener('focusin', focusChanged)
   doc.addEventListener('focusout', schedule)
-  doc.addEventListener('input', schedule)
+  doc.addEventListener('input', inputChanged)
+  for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel']) doc.addEventListener(type, userActivity, { capture: true, passive: true })
+  for (const type of ['compositionstart', 'compositionend']) doc.addEventListener(type, compositionChanged)
   doc.addEventListener('keydown', keydown)
   const offActivity = activity?.subscribe(schedule)
   sync()
@@ -564,7 +594,9 @@ export function installFullView(doc, input = {}, activity = null) {
     doc.removeEventListener('pointerdown', outsidePointer, true)
     doc.removeEventListener('focusin', focusChanged)
     doc.removeEventListener('focusout', schedule)
-    doc.removeEventListener('input', schedule)
+    doc.removeEventListener('input', inputChanged)
+    for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel']) doc.removeEventListener(type, userActivity, true)
+    for (const type of ['compositionstart', 'compositionend']) doc.removeEventListener(type, compositionChanged)
     doc.removeEventListener('keydown', keydown)
     if (raf !== null) win.cancelAnimationFrame(raf)
     restore()

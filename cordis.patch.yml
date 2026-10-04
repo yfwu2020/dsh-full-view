@@ -6,3 +6,4 @@
         chatHeight: 540
         edgeGap: 20
         rememberGeometry: true
+        compactIdleSeconds: 30
