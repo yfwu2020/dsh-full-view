@@ -31,10 +31,10 @@
    @yfwu2020/dsh-full-view
    ```
 
-   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.1`。也可以使用 GitHub 上的 0.1.1 安装包地址：
+   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.2`。也可以使用 GitHub 上的 0.1.2 安装包地址：
 
    ```text
-   https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.1/yfwu2020-dsh-full-view-0.1.1.tgz
+   https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.2/yfwu2020-dsh-full-view-0.1.2.tgz
    ```
 
 3. 在已安装列表中找到 **`@yfwu2020/dsh-full-view`**，打开开关。
@@ -47,7 +47,7 @@
 也可以在「添加插件」中填写指定版本的源码地址：
 
 ```text
-github:yfwu2020/dsh-full-view#v0.1.1
+github:yfwu2020/dsh-full-view#v0.1.2
 ```
 
 仓库和安装包都带有构建好的插件文件，使用者不需要自行编译。如果 GitHub 直链无法访问，可以先从 [Releases](https://github.com/yfwu2020/dsh-full-view/releases/latest) 下载 `.tgz`，解压后在「添加插件」中填写包含插件 `package.json` 的目录绝对路径。
@@ -70,7 +70,9 @@ github:yfwu2020/dsh-full-view#v0.1.1
 
 进入完整视图后，预览占据主工作区，当前聊天浮到右下角。左侧导航若已展开，会继续保留。输入框中原有的草稿继续保留，可以接着编辑和发送。
 
-![完整视图中的聊天小窗：顶部标题栏、底部输入框和右下角调整大小手柄](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/full-view.jpg)
+![完整视图中的聊天小窗：顶部标题栏和底部输入框](https://raw.githubusercontent.com/yfwu2020/dsh-full-view/main/docs/images/full-view.jpg)
+
+截图来自 0.1.1。自 0.1.2 起，右下角不再显示调整大小的角标，仍可按住该位置拖动。
 
 | 小窗上的位置 | 操作 | 结果 |
 | --- | --- | --- |
@@ -142,6 +144,11 @@ node scripts/install-local.mjs desktop
 请在 [Issues](https://github.com/yfwu2020/dsh-full-view/issues) 中说明系统、Harness 版本、是否已开启右侧全屏、复现步骤，并附上能说明布局问题的截图。截图前请遮盖私人会话和敏感内容。
 
 ## 更新记录
+
+### 0.1.2
+
+- 移除聊天小窗右下角的角标，保留拖动调整大小功能。
+- 正式 GitHub Release 自动构建、测试并发布到 npm。
 
 ### 0.1.1
 

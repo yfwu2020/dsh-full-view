@@ -50,7 +50,6 @@ export const style = `
 [data-dsh-floating-chat][data-dsh-chat-minimized] { height: 36px !important; }
 [data-dsh-floating-chat][data-dsh-chat-minimized] > :not([data-dsh-full-view-toolbar]) { display: none !important; }
 [data-dsh-full-view-resize] { position: absolute; width: 16px; height: 16px; bottom: 1px; right: 1px; z-index: 2; cursor: nwse-resize; touch-action: none; }
-[data-dsh-full-view-resize]::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 5px; height: 5px; border-right: 1px solid var(--dsw-alias-label-tertiary, #999); border-bottom: 1px solid var(--dsw-alias-label-tertiary, #999); }
 [data-dsh-fv-dragging] { user-select: none; cursor: grabbing; }
 [data-dsh-fv-dragging] iframe { pointer-events: none !important; }
 @keyframes dsh-fv-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
