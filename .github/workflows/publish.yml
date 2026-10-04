@@ -47,10 +47,11 @@ jobs:
         run: |
           mkdir -p .local
           npm pack --ignore-scripts --pack-destination .local
-      - name: Validate publication without uploading
+      - name: Validate the local package without uploading
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.value }}
-        run: npm publish ".local/yfwu2020-dsh-full-view-${PACKAGE_VERSION}.tgz" --dry-run --access public --ignore-scripts
+        # Use a separate, empty cache so an existing npm version does not block a manual rehearsal.
+        run: npm publish ".local/yfwu2020-dsh-full-view-${PACKAGE_VERSION}.tgz" --dry-run --offline --cache .local/dry-run-cache --access public --ignore-scripts
       - name: Publish through npm trusted publishing
         if: github.event_name == 'release'
         env:
