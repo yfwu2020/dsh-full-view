@@ -720,3 +720,33 @@ test('完整小窗的标题和空白只拖动，单击不切换；标题方向�
     assert.equal(f.document.getElementById('draft').textContent, '正在编辑的草稿')
   } finally { dispose(); f.dom.window.close() }
 })
+
+test('浮窗隐藏聊天和草稿滚动条并释放占位，原滚动容器及分栏样式保持', async () => {
+  const f = composerFixture(), hostStyle = f.document.createElement('style')
+  hostStyle.textContent = '[data-conversation-scroll] { overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: auto; margin-right: 2px; } [data-input-scroll] { overflow-y: auto; scrollbar-gutter: stable; scrollbar-width: auto; }'
+  f.document.head.append(hostStyle)
+  const conversationScroll = f.document.querySelector('[data-conversation-scroll]'), inputScroll = f.document.querySelector('[data-input-scroll]')
+  conversationScroll.scrollTop = 130; inputScroll.scrollTop = 24
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    for (const node of [conversationScroll, inputScroll]) {
+      assert.equal(f.dom.window.getComputedStyle(node).scrollbarWidth, 'none')
+      assert.equal(f.dom.window.getComputedStyle(node).scrollbarGutter, 'auto')
+      assert.equal(f.dom.window.getComputedStyle(node).overflowY, 'auto', '隐藏轨道不能关闭原滚动能力')
+    }
+    assert.equal(f.dom.window.getComputedStyle(conversationScroll).marginRight, '0px')
+    f.document.getElementById('draft').focus()
+    assert.equal(f.dom.window.getComputedStyle(conversationScroll).scrollbarWidth, 'none')
+    assert.equal(conversationScroll.scrollTop, 130)
+    assert.equal(inputScroll.scrollTop, 24)
+    f.exit(); await settle()
+    for (const node of [conversationScroll, inputScroll]) {
+      assert.equal(f.dom.window.getComputedStyle(node).scrollbarWidth, 'auto')
+      assert.equal(f.dom.window.getComputedStyle(node).scrollbarGutter, 'stable')
+    }
+    assert.equal(f.document.querySelector('[data-conversation-scroll]'), conversationScroll)
+    assert.equal(f.document.querySelector('[data-input-scroll]'), inputScroll)
+    assert.equal(f.dom.window.getComputedStyle(conversationScroll).marginRight, '2px')
+  } finally { dispose(); f.dom.window.close() }
+})
