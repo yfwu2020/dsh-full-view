@@ -171,6 +171,8 @@ node scripts/preview.mjs
 
 尺寸配置、实现边界和验证记录见 [技术说明](docs/technical.md) 与 [验证记录](VALIDATION.md)。
 
+维护者发布新版本时，请参阅 [发布指南](docs/releasing.md)。正式 GitHub Release 会触发 npm 发布；普通提交只运行检查。
+
 ## 许可证
 
 [MIT](LICENSE)
