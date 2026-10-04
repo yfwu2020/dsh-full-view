@@ -31,10 +31,10 @@
    @yfwu2020/dsh-full-view
    ```
 
-   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.2`。也可以使用 GitHub 上的 0.1.2 安装包地址：
+   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.3`。也可以使用 GitHub 上的 0.1.3 安装包地址：
 
    ```text
-   https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.2/yfwu2020-dsh-full-view-0.1.2.tgz
+   https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.3/yfwu2020-dsh-full-view-0.1.3.tgz
    ```
 
 3. 在已安装列表中找到 **`@yfwu2020/dsh-full-view`**，打开开关。
@@ -47,7 +47,7 @@
 也可以在「添加插件」中填写指定版本的源码地址：
 
 ```text
-github:yfwu2020/dsh-full-view#v0.1.2
+github:yfwu2020/dsh-full-view#v0.1.3
 ```
 
 仓库和安装包都带有构建好的插件文件，使用者不需要自行编译。如果 GitHub 直链无法访问，可以先从 [Releases](https://github.com/yfwu2020/dsh-full-view/releases/latest) 下载 `.tgz`，解压后在「添加插件」中填写包含插件 `package.json` 的目录绝对路径。
@@ -78,12 +78,15 @@ github:yfwu2020/dsh-full-view#v0.1.2
 | --- | --- | --- |
 | 顶部标题栏 | 按住并拖动 | 移动聊天小窗 |
 | 右下角 | 按住并拖动 | 调整小窗大小 |
+| 右下角 | 双击 | 恢复默认尺寸，保留当前位置 |
 | 标题栏减号 | 点击 | 收起聊天，仅保留标题栏 |
 | 收起后的减号按钮 | 再次点击 | 展开聊天 |
 | 标题栏分栏图标 | 点击 | 退出完整视图，回到分栏 |
 | 顶部标题栏 | 双击 | 恢复默认尺寸和右下角位置 |
 
 小窗默认宽 **400px**、高 **540px**，会根据可见工作区限制尺寸。默认会记住你调整后的位置和大小。
+
+右下角不显示角标，将鼠标移到那里可拖动缩放；双击则恢复默认尺寸。若已自定义初始尺寸，会恢复为该配置。空间不足时会自动限制尺寸，并调整位置以保持小窗可见。
 
 ### 3. 需要更多空间时，收起聊天
 
@@ -144,6 +147,11 @@ node scripts/install-local.mjs desktop
 请在 [Issues](https://github.com/yfwu2020/dsh-full-view/issues) 中说明系统、Harness 版本、是否已开启右侧全屏、复现步骤，并附上能说明布局问题的截图。截图前请遮盖私人会话和敏感内容。
 
 ## 更新记录
+
+### 0.1.3
+
+- 支持双击小窗右下角恢复默认尺寸，并保留当前位置。
+- 恢复后的尺寸会继续记忆，原会话和草稿保留。
 
 ### 0.1.2
 

@@ -33,6 +33,43 @@ function fixture() {
 
 const settle = async () => { await new Promise(resolve => setTimeout(resolve, 40)) }
 
+test('双击右下角恢复配置尺寸，保留位置和草稿，并记住恢复后的尺寸', async () => {
+  for (const config of [{}, { chatWidth: 480, chatHeight: 600 }]) {
+    const f = fixture()
+    const key = 'dsh.full-view.geometry.v1'
+    f.dom.window.localStorage.setItem(key, JSON.stringify({ x: 400, y: 80, width: 650, height: 640 }))
+    let dispose = install(f.document, config)
+    try {
+      f.enter(); await settle()
+      const draft = f.document.getElementById('draft')
+      const preview = f.document.getElementById('preview')
+      const corner = f.document.querySelector('[data-dsh-full-view-resize]')
+      corner.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+      corner.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), '666px')
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-height'), '656px')
+      corner.dispatchEvent(new f.dom.window.MouseEvent('dblclick', { bubbles: true }))
+      const width = config.chatWidth ?? 400
+      const height = config.chatHeight ?? 540
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), `${width}px`)
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-height'), `${height}px`)
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-x'), '400px')
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-y'), '80px')
+      assert.equal(f.document.getElementById('draft'), draft)
+      assert.equal(draft.value, '正在编辑的草稿')
+      assert.equal(f.document.getElementById('preview'), preview)
+      assert.deepEqual(JSON.parse(f.dom.window.localStorage.getItem(key)), { x: 400, y: 80, width, height })
+      dispose()
+      dispose = install(f.document, config)
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), `${width}px`)
+      assert.equal(f.chat.style.getPropertyValue('--dsh-fv-height'), `${height}px`)
+    } finally {
+      dispose()
+      f.dom.window.close()
+    }
+  }
+})
+
 test('进入完整视图浮起原聊天节点，并保留网页、草稿、发送事件和流式消息', async () => {
   assert.equal(typeof install, 'function', '插件尚未实现完整视图行为')
   const f = fixture()

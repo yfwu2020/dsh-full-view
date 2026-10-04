@@ -145,8 +145,13 @@ export function installFullView(doc, input = {}) {
     resize = doc.createElement('div')
     resize.setAttribute('data-dsh-full-view-resize', '')
     resize.setAttribute('role', 'separator')
-    resize.setAttribute('aria-label', '调整聊天小窗大小')
+    resize.setAttribute('aria-label', '调整聊天小窗大小，双击恢复默认尺寸')
+    resize.title = '拖动调整大小，双击恢复默认尺寸'
     resize.tabIndex = 0
+    resize.addEventListener('dblclick', () => {
+      preferred = { ...geometry(), width: config.chatWidth, height: config.chatHeight }
+      updateGeometry(); persist()
+    })
     resize.addEventListener('keydown', event => {
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
       event.preventDefault()
