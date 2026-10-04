@@ -53,6 +53,7 @@ export function installFullView(doc, input = {}, activity = null) {
   let modelTrigger = null
   let modelIcon = null
   let collapsedHeight = 48
+  let returningFocus = false
   let suppressEdgeClick = false
   let title = null
   let minimize = null
@@ -104,7 +105,10 @@ export function installFullView(doc, input = {}, activity = null) {
   const belongsToConversation = node => node.closest('[data-conversation-session], [data-conversation-root]') === conversation()
   const composerSeat = () => [...(surface?.chat.querySelectorAll('[data-composer-seat]') ?? [])].find(belongsToConversation)
   const editor = () => composer?.card.querySelector('[data-composer-input], textarea') ?? (!composerSeat() ? conversation()?.querySelector('textarea') : null)
-  const focusEditor = () => editor()?.focus({ preventScroll: true })
+  const focusEditor = () => {
+    returningFocus = true
+    try { editor()?.focus({ preventScroll: true }) } finally { returningFocus = false }
+  }
   const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
   const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
   const popupOpen = () => [...doc.querySelectorAll(popupSelector)].some(node => {
@@ -121,9 +125,9 @@ export function installFullView(doc, input = {}, activity = null) {
   })
   const updateGeometry = () => {
     if (!surface) return
-    const chrome = mode !== 'hidden' && (mode === 'expanded' || !composer || withinChat(doc.activeElement) || !!drag || popupOpen())
+    const chrome = mode === 'expanded' || (mode === 'compact' && !composer)
     surface.chat.toggleAttribute('data-dsh-chat-chrome', chrome)
-    if (composer) collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2) + (chrome ? 36 : 0)
+    if (composer) collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2)
     const b = bounds()
     const g = geometry()
     setStyle(surface.chat, '--dsh-fv-collapsed-height', `${g.visibleHeight}px`)
@@ -324,8 +328,9 @@ export function installFullView(doc, input = {}, activity = null) {
     resize = handles[0]
     badge = button('恢复聊天', 'data-dsh-restore-chat', null, event => {
       if (suppressChromeClick && event.detail !== 0) { suppressChromeClick = false; return }
-      setMode('compact', { focus: true })
+      setMode('expanded', { focus: true })
     })
+    badge.hidden = true
     badge.addEventListener('keydown', moveWithKeyboard)
     badge.removeAttribute('title')
     const whale = doc.createElement('span')
@@ -509,10 +514,16 @@ export function installFullView(doc, input = {}, activity = null) {
     if (!disposed && raf === null) raf = win.requestAnimationFrame(sync)
   }
   const outsidePointer = event => {
-    if (!surface || mode !== 'expanded' || drag || approvalState || withinChat(event.target) || popupOpen()) return
+    if (!surface || drag) return
+    if (mode === 'compact' && editor()?.contains(event.target)) { setMode('expanded'); return }
+    if (mode !== 'expanded' || approvalState || withinChat(event.target) || popupOpen()) return
     setMode('compact')
   }
-  const focusChanged = () => { if (surface) updateGeometry() }
+  const focusChanged = event => {
+    if (!surface) return
+    if (mode === 'compact' && !returningFocus && editor()?.contains(event.target)) setMode('expanded')
+    else updateGeometry()
+  }
   const keydown = event => {
     if (!surface || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return
     if (drag) { event.preventDefault(); event.stopPropagation(); finishPointer(null, true); return }

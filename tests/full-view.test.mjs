@@ -47,7 +47,8 @@ function composerFixture() {
 
 function displayed(element, win) {
   for (let current = element; current; current = current.parentElement) {
-    if (win.getComputedStyle(current).display === 'none') return false
+    const css = win.getComputedStyle(current)
+    if (css.display === 'none' || css.visibility === 'hidden') return false
   }
   return true
 }
@@ -73,15 +74,15 @@ test('收起成输入条后仍能输入和发送，点击外缘切换聊天并�
     assert.equal(f.document.getElementById('permission').getAttribute('aria-label'), '权限模式：完全权限')
     draft.textContent = '继续编辑的草稿'
     draft.dispatchEvent(new f.dom.window.InputEvent('input', { bubbles: true }))
-    for (const id of ['draft', 'add', 'permission', 'model', 'send']) f.document.getElementById(id).click()
+    for (const id of ['add', 'permission', 'model', 'send']) f.document.getElementById(id).click()
     assert.equal(sends, 1)
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '编辑和点击原按钮不应切换聊天')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '草稿内容更新和原按钮动作不代替用户聚焦')
     messages.textContent += '，后台流式追加'
     edge.click()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
     assert.equal(edge.getAttribute('aria-expanded'), 'true')
     assert.equal(displayed(messages, f.dom.window), true)
-    assert.equal(displayed(f.document.getElementById('input-footer'), f.dom.window), true)
+    assert.equal(displayed(f.document.getElementById('input-footer'), f.dom.window), false, '展开后也不显示统计数字')
     assert.match(messages.textContent, /后台流式追加/)
     assert.equal(f.document.getElementById('draft'), draft)
     assert.equal(f.document.getElementById('preview'), preview)
@@ -92,7 +93,7 @@ test('收起成输入条后仍能输入和发送，点击外缘切换聊天并�
   } finally { dispose(); f.dom.window.close() }
 })
 
-test('左上角减号始终隐藏聊天，标题仍可展开，恢复时保留原草稿', async () => {
+test('左上角减号隐藏聊天，恢复完整小窗时保留原草稿', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   try {
     f.enter(); await settle()
@@ -102,8 +103,7 @@ test('左上角减号始终隐藏聊天，标题仍可展开，恢复时保留�
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
     f.document.querySelector('[data-dsh-restore-chat]').click()
     assert.equal(f.document.activeElement, f.document.getElementById('draft'))
-    f.document.querySelector('[data-dsh-full-view-title]').click()
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '恢复并聚焦直接显示完整小窗')
     f.document.querySelector('[data-dsh-minimize-chat]').click()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
     f.document.querySelector('[data-dsh-restore-chat]').click()
@@ -274,7 +274,7 @@ test('卸载插件清理样式、工具栏和几何标记，保留宿主原有�
 })
 
 // These regressions exercise user actions on the original host DOM, not copied UI.
-test('输入焦点揭示紧凑标题栏，隐藏后可恢复草稿，返回分栏清理恢复入口', async () => {
+test('输入焦点直接展开完整聊天，隐藏恢复同样展开并保留草稿，分栏还原统计', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   try {
     f.enter(); await settle()
@@ -284,7 +284,9 @@ test('输入焦点揭示紧凑标题栏，隐藏后可恢复草稿，返回分�
     assert.equal(f.chat.hasAttribute('data-dsh-chat-chrome'), false)
     draft.focus()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-chrome'), true)
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(displayed(f.document.getElementById('messages'), f.dom.window), true)
+    assert.equal(displayed(f.document.getElementById('input-footer'), f.dom.window), false)
     f.document.querySelector('[data-dsh-minimize-chat]').click()
     assert.equal(displayed(draft, f.dom.window), false)
     const restore = f.document.querySelector('[data-dsh-restore-chat]')
@@ -296,6 +298,7 @@ test('输入焦点揭示紧凑标题栏，隐藏后可恢复草稿，返回分�
     f.document.querySelector('[data-dsh-return-split]').click(); await settle()
     assert.equal(f.document.querySelector('[data-dsh-restore-chat]'), null)
     assert.equal(f.chat.hasAttribute('inert'), false)
+    assert.equal(displayed(f.document.getElementById('input-footer'), f.dom.window), true, '普通分栏的统计恢复')
   } finally { dispose(); f.dom.window.close() }
 })
 
@@ -579,7 +582,7 @@ test('内嵌子会话不会抢走当前会话输入框或触发当前会话待�
     f.document.querySelector('[data-conversation-region="messages"]').prepend(nested)
     f.enter(); await settle()
     const draft = f.document.getElementById('draft'); draft.focus()
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
     f.document.querySelector('[data-dsh-minimize-chat]').click(); f.document.querySelector('[data-dsh-restore-chat]').click()
     assert.equal(f.document.activeElement, draft)
     assert.equal(f.document.querySelector('[data-dsh-full-view-composer-card]').contains(draft), true)
@@ -590,11 +593,32 @@ test('紧凑状态双击边缘恢复默认尺寸时保持输入条底部位置',
   const f = composerFixture(); f.dom.window.localStorage.setItem('dsh.full-view.geometry.v1', JSON.stringify({x:400,y:80,width:600,height:640}))
   const dispose = install(f.document)
   try {
-    f.enter(); await settle(); f.document.getElementById('draft').focus()
+    f.enter(); await settle()
     const bottom = () => parseFloat(f.chat.style.getPropertyValue('--dsh-fv-y')) + parseFloat(f.chat.style.getPropertyValue('--dsh-fv-collapsed-height'))
     const previous = bottom()
     f.document.querySelector('[data-dsh-resize-direction="w"]').dispatchEvent(new f.dom.window.MouseEvent('dblclick', { bubbles: true }))
     assert.equal(bottom(), previous)
     assert.equal(f.chat.style.getPropertyValue('--dsh-fv-width'), '400px')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+// Catch the case where Esc collapses the panel but the original editor retains focus.
+test('Esc 收起后点击已聚焦输入框可展开，标题收起归还焦点不反弹', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const draft = f.document.getElementById('draft')
+    draft.focus()
+    draft.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    assert.equal(f.document.activeElement, draft)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    assert.equal(displayed(f.document.querySelector('[data-dsh-full-view-toolbar]'), f.dom.window), false)
+    draft.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    const title = f.document.querySelector('[data-dsh-full-view-title]')
+    title.focus(); title.click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '点击标题收起后程序归还输入焦点不能再次展开')
+    assert.equal(f.document.activeElement, draft)
+    assert.equal(displayed(f.document.querySelector('[data-dsh-full-view-toolbar]'), f.dom.window), false)
   } finally { dispose(); f.dom.window.close() }
 })
