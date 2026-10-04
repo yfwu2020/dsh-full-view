@@ -73,3 +73,12 @@
 ## 浮窗滚动条与输入框对齐
 
 宿主 `[data-conversation-scroll]` 同时包含消息和 composer，原样式有 `scrollbar-gutter: stable` 和 2px 右边距。紧凑形态的输入路径使用全宽定位，会释放这块预留空间，导致展开 / 收起时输入框宽度变化。浮窗标记范围内，聊天及 `[data-input-scroll]` 使用 `scrollbar-width: none`、`scrollbar-gutter: auto` 和零尺寸 WebKit 滚动条；聊天滚动容器右边距改为 0。保留宿主 overflow 和原滚动节点，滚动与长草稿编辑仍由 Harness 处理。退出完整视图或卸载后覆盖失效，分栏恢复宿主滚动条与间距。
+
+
+### 鲸鱼球状态
+
+通过宿主 `uiSession.sessionStatus` 读取运行、`pendingInteraction.kind` 和完成提醒；等待回应优先于运行，运行优先于完成，最后为空闲。标题在当前主会话被保留时会清除 `completionUnread`，因此同时核对最新匹配的 `turn/start` / `turn/end`，使当前球形状态仍可显示已完成。新的运行和切换会话不会继承之前的完成状态。
+
+6px 小点位于 40px 球内的 top/right 7px。颜色直接引用原生 StateDot 的 `--dsw-alias-label-tertiary`（ongoing）、`--dsw-alias-state-success-primary`（done）、`--dsw-alias-state-warn-primary`（warning）、`--dsw-alias-state-idle-primary`（idle）。状态点不拦截鼠标，不显示文字或悬停标题，辅助标签区分等待回答、审批和计划确认。
+
+原本隐藏的会话出现待办时保留鲸鱼球；点击恢复展开原控件，并优先聚焦待办的输入控件或操作按钮。紧凑条遇到待办仍展开。已展开待办处理前禁止再次隐藏，处理后恢复原形态。显示时 visibility 立即生效，隐藏时延迟至淡出结束，避免动画开始时拒绝输入焦点。

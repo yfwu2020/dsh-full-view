@@ -342,7 +342,7 @@ test('其他插件藏在 display:none 父层里的对话框不阻止 Esc 和外�
   } finally { dispose(); f.dom.window.close() }
 })
 
-test('审批覆盖层在紧凑或隐藏时出现会展开，处理完成后恢复原状态', async () => {
+test('紧凑条遇到待办展开，鲸鱼球保留提醒，点击恢复待办并在处理后回到原状态', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   try {
     f.enter(); await settle()
@@ -355,6 +355,13 @@ test('审批覆盖层在紧凑或隐藏时出现会展开，处理完成后恢�
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
     f.document.querySelector('[data-dsh-minimize-chat]').click()
     f.document.querySelector('[data-composer-card]').prepend(approval); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    const badge = f.document.querySelector('[data-dsh-restore-chat]')
+    assert.equal(badge.querySelector('[data-dsh-whale-status]').getAttribute('data-state'), 'warning')
+    badge.click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    assert.equal(f.document.activeElement, approval.querySelector('button'))
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
     approval.remove(); await settle()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
@@ -748,5 +755,71 @@ test('浮窗隐藏聊天和草稿滚动条并释放占位，原滚动容器及�
     assert.equal(f.document.querySelector('[data-conversation-scroll]'), conversationScroll)
     assert.equal(f.document.querySelector('[data-input-scroll]'), inputScroll)
     assert.equal(f.dom.window.getComputedStyle(conversationScroll).marginRight, '2px')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+
+test('鲸鱼右上状态点使用标题原生色：待回应优先于运行，完成与空闲可区分', async () => {
+  const f = composerFixture(), activity = activityFixture(), dispose = install(f.document, {}, activity)
+  const native = f.document.createElement('span'); f.document.body.append(native)
+  const hostTheme = f.document.createElement('style')
+  hostTheme.textContent = ':root { --dsw-alias-label-tertiary: rgb(120, 121, 122); --dsw-alias-state-success-primary: rgb(30, 160, 60); --dsw-alias-state-warn-primary: rgb(190, 130, 20); --dsw-alias-state-idle-primary: rgb(140, 140, 140); }'
+  f.document.head.append(hostTheme)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const badge = f.document.querySelector('[data-dsh-restore-chat]'), dot = badge.querySelector('[data-dsh-whale-status]')
+    assert.ok(dot); assert.equal(dot.getAttribute('aria-hidden'), 'true')
+    const check = (state, token) => {
+      assert.equal(dot.getAttribute('data-state'), state)
+      native.style.color = `var(${token})`
+      assert.equal(f.dom.window.getComputedStyle(dot).color, f.dom.window.getComputedStyle(native).color)
+    }
+    check('idle', '--dsw-alias-state-idle-primary')
+    assert.equal(f.dom.window.getComputedStyle(dot).width, '6px')
+    assert.equal(f.dom.window.getComputedStyle(dot).top, '7px')
+    assert.equal(f.dom.window.getComputedStyle(dot).right, '7px')
+    activity.update({ running: true, completed: true, pending: false }); await settle()
+    check('ongoing', '--dsw-alias-label-tertiary'); assert.equal(badge.hasAttribute('data-dsh-running'), true)
+    activity.update({ running: true, completed: true, pending: true, pendingKind: 'question' }); await settle()
+    check('warning', '--dsw-alias-state-warn-primary'); assert.match(badge.getAttribute('aria-label'), /等待回答/)
+    assert.equal(badge.hasAttribute('data-dsh-running'), false)
+    activity.update({ running: false, pending: false, completed: true }); await settle()
+    check('done', '--dsw-alias-state-success-primary'); assert.match(badge.getAttribute('aria-label'), /已完成/)
+    hostTheme.textContent = ':root { --dsw-alias-state-success-primary: rgb(80, 200, 100); }'; await settle()
+    check('done', '--dsw-alias-state-success-primary')
+    activity.update({ running: false, pending: false, completed: false }); await settle()
+    assert.equal(dot.getAttribute('data-state'), 'idle')
+    assert.equal(badge.textContent, ''); assert.equal(badge.hasAttribute('title'), false)
+    dispose(); assert.equal(f.document.querySelector('[data-dsh-whale-status]'), null)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+
+test('隐藏鲸鱼球区分问题和计划确认，恢复时聚焦原待办输入并可键盘移动', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const question = f.document.createElement('section')
+    question.setAttribute('data-question-key', 'q1')
+    question.innerHTML = '<textarea aria-label="回答"></textarea><button>提交回答</button>'
+    f.document.querySelector('[data-composer-card]').prepend(question); await settle()
+    const badge = f.document.querySelector('[data-dsh-restore-chat]')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    assert.equal(badge.getAttribute('aria-label'), '恢复聊天，等待回答')
+    const before = badge.style.left
+    badge.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }))
+    assert.notEqual(badge.style.left, before)
+    badge.click()
+    assert.equal(f.document.activeElement, question.querySelector('textarea'))
+    question.remove(); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    const plan = f.document.createElement('section')
+    plan.setAttribute('data-plan-review-key', 'p1'); plan.innerHTML = '<button>确认计划</button>'
+    f.document.querySelector('[data-composer-card]').prepend(plan); await settle()
+    assert.equal(badge.getAttribute('aria-label'), '恢复聊天，等待计划确认')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    badge.click()
+    assert.equal(f.document.activeElement, plan.querySelector('button'))
   } finally { dispose(); f.dom.window.close() }
 })

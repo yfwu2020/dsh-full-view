@@ -109,7 +109,14 @@ export function installFullView(doc, input = {}, activity = null) {
   const editor = () => composer?.card.querySelector('[data-composer-input], textarea') ?? (!composerSeat() ? conversation()?.querySelector('textarea') : null)
   const focusEditor = () => {
     returningFocus = true
-    try { editor()?.focus({ preventScroll: true }) } finally { returningFocus = false }
+    try {
+      const pending = [...(surface?.chat.querySelectorAll(pendingSelector) ?? [])].find(belongsToConversation)
+      const target = pending?.querySelector('textarea, input:not([type="hidden"]):not(:disabled), [contenteditable="true"]')
+        ?? pending?.querySelector('button:not(:disabled), [tabindex]:not([tabindex="-1"])')
+        ?? editor()
+      target?.focus({ preventScroll: true })
+
+    } finally { returningFocus = false }
   }
   const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
   const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
@@ -129,7 +136,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (idleTimer !== null) win.clearTimeout(idleTimer)
     idleTimer = null
   }
-  const canRecycle = () => surface && mode === 'compact' && composer && config.compactIdleSeconds > 0 && !approvalState && !drag && !composing && !popupOpen()
+  const canRecycle = () => surface && mode === 'compact' && composer && config.compactIdleSeconds > 0 && !approvalState && !activity?.getSnapshot().pending && !drag && !composing && !popupOpen()
   // Mutation/activity refreshes maintain an existing deadline; only user input resets it.
   const syncIdle = () => {
     if (!canRecycle()) { clearIdle(); return }
@@ -292,7 +299,7 @@ export function installFullView(doc, input = {}, activity = null) {
     return element
   }
   const moveWithKeyboard = event => {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) || approvalState && mode === 'hidden') return
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
     event.preventDefault(); event.stopPropagation()
     const g = geometry(), step = event.shiftKey ? 48 : 16
     preferred = { width: g.width, height: g.height, x: g.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0), y: g.y - g.offset + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) }
@@ -362,6 +369,10 @@ export function installFullView(doc, input = {}, activity = null) {
     whale.setAttribute('data-dsh-whale-icon', '')
     whale.setAttribute('aria-hidden', 'true')
     badge.append(whale)
+    const statusDot = doc.createElement('span')
+    statusDot.setAttribute('data-dsh-whale-status', '')
+    statusDot.setAttribute('aria-hidden', 'true')
+    badge.append(statusDot)
     syncNativeWhale(doc, badge)
     processing = doc.createElement('div')
     processing.setAttribute('data-dsh-processing-status', '')
@@ -445,7 +456,12 @@ export function installFullView(doc, input = {}, activity = null) {
     const state = activity?.getSnapshot() ?? { running: false }
     const running = state.running && !state.pending && !approvalState
     badge.toggleAttribute('data-dsh-running', running)
-    badge.setAttribute('aria-label', running ? '恢复聊天，正在处理' : '恢复聊天')
+    const status = state.pending || approvalState ? 'warning' : running ? 'ongoing' : state.completed ? 'done' : 'idle'
+    badge.querySelector('[data-dsh-whale-status]').setAttribute('data-state', status)
+    const pendingKind = state.pendingKind ?? approvalState?.kind
+    const statusLabel = status === 'warning' ? pendingKind === 'question' ? '等待回答' : pendingKind === 'plan-review' ? '等待计划确认' : '等待确认'
+      : status === 'ongoing' ? '正在处理' : status === 'done' ? '已完成' : '空闲'
+    badge.setAttribute('aria-label', `恢复聊天，${statusLabel}`)
     const input = editor()
     const hasDraft = !!(input?.matches('textarea') ? input.value : input?.textContent)?.trim()
     const hidden = !running || !composer || hasDraft
@@ -492,11 +508,16 @@ export function installFullView(doc, input = {}, activity = null) {
   const syncApproval = () => {
     const seat = composerSeat()
     // Pending interactions replace the native composer. Trajectory overlays do not.
-    const blocked = [...surface.chat.querySelectorAll(pendingSelector)].some(belongsToConversation) || !!(seat?.childElementCount && !composer)
+    const pending = [...surface.chat.querySelectorAll(pendingSelector)].find(belongsToConversation)
+    const blocked = !!pending || !!(seat?.childElementCount && !composer)
+    const kind = pending?.hasAttribute('data-question-key') ? 'question' : pending?.hasAttribute('data-plan-review-key') ? 'plan-review' : 'approval'
     if (blocked && !approvalState) {
       const previous = mode
-      approvalState = { previous }
-      setMode('expanded', { force: true })
+      approvalState = { previous, kind }
+      // An already hidden chat signals via the whale dot; opening it reveals the original prompt.
+      if (previous !== 'hidden') setMode('expanded', { force: true })
+    } else if (blocked && approvalState) {
+      approvalState.kind = kind
     } else if (!blocked && approvalState) {
       const previous = approvalState.previous
       approvalState = null

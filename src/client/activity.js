@@ -21,6 +21,7 @@ export function createActivitySource(ctx) {
       const state = status.getSnapshot().get(id)
       const running = state?.running ?? binding?.session.getSnapshot().running ?? false
       const pending = !!state?.pendingInteraction
+      const pendingKind = state?.pendingInteraction?.kind ?? null
       let end = null
       let start = null
       const entries = binding?.eventSource.getSnapshot().entries ?? []
@@ -32,7 +33,9 @@ export function createActivitySource(ctx) {
       // A completed previous turn must never become the clock for a queued next turn.
       const completed = start && end && end.data.turn === start.data.turn
       const startedAt = running && !completed && Number.isFinite(start?.time) ? start.time : null
-      return { running, pending, startedAt }
+      // Main-view retention clears the host's unread reminder even while the
+      // plugin has hidden the chat. Keep the latest ended turn distinguishable.
+      return { running, pending, pendingKind, completed: !running && (state?.completionUnread === true || !!completed), startedAt }
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
     dispose() {
