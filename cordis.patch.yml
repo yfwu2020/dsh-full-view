@@ -1,0 +1,8 @@
+- insert:
+    - id: full-view
+      name: '@yfwu2020/dsh-full-view'
+      config:
+        chatWidth: 400
+        chatHeight: 540
+        edgeGap: 20
+        rememberGeometry: true

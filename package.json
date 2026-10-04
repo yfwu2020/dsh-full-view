@@ -1,0 +1,20 @@
+{
+  "name": "@yfwu2020/dsh-full-view",
+  "version": "0.1.1",
+  "description": "完整视图中保留原会话为可拖动、缩放的聊天小窗，退出时恢复分栏",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": { ".": "./lib/index.js", "./client": "./lib/client.js", "./package.json": "./package.json" },
+  "files": ["lib", "src", "scripts", "tests", "docs", "preview/index.html", "cordis.patch.yml", "README.md", "VALIDATION.md", "LICENSE"],
+  "repository": { "type": "git", "url": "git+https://github.com/yfwu2020/dsh-full-view.git" },
+  "homepage": "https://github.com/yfwu2020/dsh-full-view#readme",
+  "bugs": { "url": "https://github.com/yfwu2020/dsh-full-view/issues" },
+  "license": "MIT",
+  "scripts": { "build": "node scripts/build.mjs", "test": "node --test tests/*.test.mjs", "check": "npm run build && npm test" },
+  "peerDependencies": { "@deepseek-ai/cordis": ">=4.0.0 <5", "@deepseek-ai/dsh-host-webserver": ">=0.2.0-rc.1 <3" },
+  "devDependencies": { "esbuild": "^0.25.0", "jsdom": "^29.1.1" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar-right"], "platform": "web" }
+  }
+}
