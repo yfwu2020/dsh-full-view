@@ -110,7 +110,6 @@ export const style = `
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-composer-card] { box-shadow: none !important; background: transparent; }
 [data-dsh-floating-chat][data-dsh-chat-minimized][data-dsh-chat-chrome] { border-radius: 18px; }
 [data-dsh-floating-chat][data-dsh-chat-minimized][data-dsh-chat-chrome] > [data-dsh-full-view-toolbar] { display: flex !important; border-radius: 18px 18px 0 0; }
-[data-dsh-full-view-toolbar] [data-dsh-hide-chat] { font-size: 20px; }
 [data-dsh-full-view-toolbar] [data-dsh-move-chat] { font-size: 20px; cursor: grab; touch-action: none; }
 [data-dsh-full-view-toolbar] button:disabled { opacity: .35; cursor: default; }
 [data-dsh-floating-chat][data-dsh-chat-hidden] { display: none !important; }

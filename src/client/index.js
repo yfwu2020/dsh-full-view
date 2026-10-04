@@ -38,7 +38,6 @@ export function installFullView(doc, input = {}) {
   let handles = []
   let badge = null
   let update = null
-  let hide = null
   let hovered = false
   let unread = false
   let approvalState = null
@@ -147,15 +146,13 @@ export function installFullView(doc, input = {}) {
       handle.setAttribute('aria-valuenow', String(Math.round(vertical ? g.height : g.width)))
       handle.setAttribute('aria-valuetext', `${Math.round(g.width)} × ${Math.round(g.height)} 像素`)
     }
-    hide.disabled = !!approvalState
-    hide.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
     minimize.disabled = !!approvalState
+    minimize.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
     const label = minimized ? '展开聊天' : '收起聊天'
     for (const control of [title, edge]) {
       control.setAttribute('aria-expanded', String(!minimized))
       control.setAttribute('aria-label', control === title ? `${label}：${title.textContent}` : label)
     }
-    minimize.title = hide.title
     title.title = title.textContent
     edge.title = approvalState ? '请先处理会话中的待办提示' : `点击外缘${minimized ? '展开' : '收起'}聊天，拖动移动`
     surface.chat.toggleAttribute('data-dsh-chat-unread', unread)
@@ -286,12 +283,10 @@ export function installFullView(doc, input = {}) {
     title = button('展开聊天', 'data-dsh-full-view-title', null, delayedToggle)
     title.textContent = '聊天'
     minimize = button('隐藏聊天，保留恢复入口', 'data-dsh-minimize-chat', 'M5 12h14', () => setMode('hidden'))
-    hide = button('隐藏聊天，保留恢复入口', 'data-dsh-hide-chat', null, () => setMode('hidden'))
-    hide.textContent = '×'
     const grip = button('移动聊天小窗：方向键移动，Shift 加大步长', 'data-dsh-move-chat', null, () => {})
     grip.textContent = '⠿'
     grip.addEventListener('keydown', moveWithKeyboard)
-    toolbar.append(minimize, title, hide, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
+    toolbar.append(minimize, title, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
     toolbar.addEventListener('click', event => {
       if (event.target.closest('button')) return
       if (suppressChromeClick && event.detail !== 0) { suppressChromeClick = false; return }
@@ -429,7 +424,7 @@ export function installFullView(doc, input = {}) {
     toolbar?.remove(); edge?.remove(); badge?.remove(); update?.remove()
     for (const handle of handles) handle.remove()
     if (focusWasChrome) focusEditor()
-    toolbar = resize = edge = title = minimize = header = badge = update = hide = null
+    toolbar = resize = edge = title = minimize = header = badge = update = null
     handles = []
     surface = null
     mode = 'expanded'; minimized = hovered = unread = false
