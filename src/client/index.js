@@ -38,7 +38,6 @@ export function installFullView(doc, input = {}) {
   let handles = []
   let badge = null
   let update = null
-  let hovered = false
   let unread = false
   let approvalState = null
   let savedAccessibility = null
@@ -120,7 +119,7 @@ export function installFullView(doc, input = {}) {
   })
   const updateGeometry = () => {
     if (!surface) return
-    const chrome = mode !== 'hidden' && (mode === 'expanded' || !composer || hovered || withinChat(doc.activeElement) || !!drag || popupOpen())
+    const chrome = mode !== 'hidden' && (mode === 'expanded' || !composer || withinChat(doc.activeElement) || !!drag || popupOpen())
     surface.chat.toggleAttribute('data-dsh-chat-chrome', chrome)
     if (composer) collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2) + (chrome ? 36 : 0)
     const b = bounds()
@@ -418,8 +417,6 @@ export function installFullView(doc, input = {}) {
     }
     for (const key of ['x', 'y', 'width', 'height', 'collapsed-height']) surface.chat.style.removeProperty(`--dsh-fv-${key}`)
     header?.removeAttribute('data-dsh-floating-header')
-    surface.chat.removeEventListener('pointerenter', enterHover)
-    surface.chat.removeEventListener('pointerleave', leaveHover)
     const focusWasChrome = [badge, update, toolbar, ...handles].some(node => node?.contains(doc.activeElement))
     toolbar?.remove(); edge?.remove(); badge?.remove(); update?.remove()
     for (const handle of handles) handle.remove()
@@ -427,7 +424,7 @@ export function installFullView(doc, input = {}) {
     toolbar = resize = edge = title = minimize = header = badge = update = null
     handles = []
     surface = null
-    mode = 'expanded'; minimized = hovered = unread = false
+    mode = 'expanded'; minimized = unread = false
     approvalState = savedAccessibility = sessionId = null
   }
   const syncApproval = () => {
@@ -444,8 +441,6 @@ export function installFullView(doc, input = {}) {
       setMode(previous, { force: true })
     }
   }
-  const enterHover = () => { hovered = true; updateGeometry() }
-  const leaveHover = () => { hovered = false; updateGeometry() }
   const sync = () => {
     raf = null
     if (disposed) return
@@ -458,8 +453,6 @@ export function installFullView(doc, input = {}) {
       sessionId = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
       buildChrome()
       surface.frame.append(badge, update)
-      surface.chat.addEventListener('pointerenter', enterHover)
-      surface.chat.addEventListener('pointerleave', leaveHover)
       surface.frame.setAttribute('data-dsh-full-view', '')
       surface.chat.setAttribute('data-dsh-floating-chat', '')
       syncComposer()

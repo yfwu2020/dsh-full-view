@@ -18,6 +18,7 @@ export const style = `
   border: 1px solid var(--dsw-alias-border-l3, #ddd) !important; border-radius: 14px;
   box-shadow: 0 12px 40px #0002, 0 2px 8px #0001; overflow: hidden;
   --dsh-frame-leading-clearance: 0px;
+  --dsh-fv-input-icon-size: 18px;
   animation: dsh-fv-appear 180ms ease-out;
   transition: border-radius 160ms ease;
 }
@@ -87,9 +88,17 @@ export const style = `
 }
 [data-dsh-floating-chat] [data-dsh-full-view-input-tools] { grid-column: 1; grid-row: 1; gap: 4px !important; }
 [data-dsh-floating-chat] [data-dsh-full-view-input-trailing] { grid-column: 3; grid-row: 1; gap: 4px !important; margin: 0 !important; }
+[data-dsh-floating-chat] [data-dsh-full-view-input-tools] button > svg:first-of-type,
+[data-dsh-floating-chat] [data-dsh-full-view-input-tools] button > span[aria-hidden="true"]:first-of-type > svg,
+[data-dsh-floating-chat] [data-dsh-full-view-input-trailing] button > svg:first-of-type {
+  width: var(--dsh-fv-input-icon-size) !important; height: var(--dsh-fv-input-icon-size) !important; flex: none;
+}
+[data-dsh-floating-chat] [data-dsh-full-view-input-tools] button > span[aria-hidden="true"]:first-of-type {
+  width: var(--dsh-fv-input-icon-size); height: var(--dsh-fv-input-icon-size); flex: none;
+}
 [data-dsh-full-view-model-icon] { display: none !important; }
 [data-dsh-full-view-model]::before {
-  content: ''; flex: none; width: 18px; height: 18px; background: currentColor;
+  content: ''; flex: none; width: var(--dsh-fv-input-icon-size); height: var(--dsh-fv-input-icon-size); background: currentColor;
   mask: url("data:image/svg+xml,${brainGlyph}") center / contain no-repeat;
 }
 [data-dsh-floating-chat] [data-dsh-full-view-input-tools] button[aria-label]:has(> span[aria-hidden="true"] > svg) > span:not([aria-hidden="true"]) { display: none !important; }

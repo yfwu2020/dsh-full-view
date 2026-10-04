@@ -278,7 +278,11 @@ test('输入焦点揭示紧凑标题栏，隐藏后可恢复草稿，返回分�
   const f = composerFixture(); const dispose = install(f.document)
   try {
     f.enter(); await settle()
-    const draft = f.document.getElementById('draft'); draft.focus()
+    const draft = f.document.getElementById('draft')
+    draft.blur()
+    f.chat.dispatchEvent(new f.dom.window.Event('pointerenter'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-chrome'), false)
+    draft.focus()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-chrome'), true)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
     f.document.querySelector('[data-dsh-minimize-chat]').click()
