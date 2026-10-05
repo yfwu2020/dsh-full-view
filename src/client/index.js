@@ -2,6 +2,7 @@ import { resolveConfig } from '../config.js'
 import { style } from './style.js'
 import { createActivitySource, processingLabel } from './activity.js'
 import { syncNativeWhale } from './whale.js'
+import { createWhaleMorph } from './morph.js'
 
 const geometryKey = 'dsh.full-view.geometry.v1'
 const pendingSelector = '[data-approval-key], [data-question-key], [data-plan-review-key]'
@@ -29,6 +30,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const config = resolveConfig(input)
   const win = doc.defaultView
   if (!win) throw new Error('dsh-full-view: no browser document')
+  const morph = createWhaleMorph(win)
   win[cleanupKey]?.()
   const sheet = doc.createElement('style')
   sheet.setAttribute('data-dsh-full-view-style', '')
@@ -43,6 +45,7 @@ export function installFullView(doc, input = {}, activity = null) {
   let clock = null
   let approvalState = null
   let savedAccessibility = null
+  let morphViewport = ''
   let sessionId = null
   let suppressChromeClick = false
   let edgeClickTimer = null
@@ -90,13 +93,13 @@ export function installFullView(doc, input = {}, activity = null) {
     const gap = Math.min(config.edgeGap, Math.max(0, Math.min(b.width, b.height) / 8))
     const width = Math.max(0, Math.min(Math.max(280, preferred.width), b.width - 2 * gap))
     const height = Math.max(0, Math.min(Math.max(240, preferred.height), b.height - 2 * gap))
-    const visibleHeight = Math.min(height, mode === 'expanded' ? height : composer ? collapsedHeight : 36)
-    const offset = mode !== 'expanded' && composer ? height - visibleHeight : 0
+    const visibleHeight = Math.min(height, !minimized ? height : composer ? collapsedHeight : 36)
+    const offset = minimized && composer ? height - visibleHeight : 0
     const clamp = (n, lo, hi) => Math.max(lo, Math.min(n, Math.max(lo, hi)))
     return {
       width, height, visibleHeight, offset,
-      x: clamp(preferred.x ?? b.left + b.width - width - gap, b.left + gap, b.left + b.width - width - gap),
-      y: clamp(preferred.y === undefined ? b.top + b.height - visibleHeight - gap : preferred.y + offset, b.top + gap, b.top + b.height - visibleHeight - gap),
+      x: clamp(preferred.x ?? b.left + b.width - width - gap, b.left + gap - (mode === 'hidden' ? Math.max(0, width - 40) : 0), b.left + b.width - width - gap),
+      y: clamp(preferred.y === undefined ? b.top + b.height - visibleHeight - gap : preferred.y + offset, b.top + gap - (mode === 'hidden' ? Math.max(0, visibleHeight - 40) : 0), b.top + b.height - visibleHeight - gap),
     }
   }
   const persist = () => {
@@ -158,10 +161,12 @@ export function installFullView(doc, input = {}, activity = null) {
   }
   const updateGeometry = () => {
     if (!surface) return
-    const chrome = mode === 'expanded' || (mode === 'compact' && !composer)
+    const chrome = !minimized || !composer
     surface.chat.toggleAttribute('data-dsh-chat-chrome', chrome)
     if (composer) collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2)
     const b = bounds()
+    const viewport = [b.left, b.top, b.width, b.height].join(':')
+    if (morph.running && viewport !== morphViewport) morph.finish()
     const g = geometry()
     setStyle(surface.chat, '--dsh-fv-collapsed-height', `${g.visibleHeight}px`)
     setStyle(surface.frame, '--dsh-fv-content-width', `${b.width}px`)
@@ -186,12 +191,18 @@ export function installFullView(doc, input = {}, activity = null) {
     title.removeAttribute('title')
     edge.title = approvalState ? '请先处理会话中的待办提示' : `点击外缘${minimized ? '展开' : '收起'}聊天，拖动移动`
   }
-  const setMode = (next, { focus = false, force = false, focusRecovery = true } = {}) => {
+  const setMode = (next, { focus = false, force = false, focusRecovery = true, animate = true } = {}) => {
     if (!surface || (approvalState && next !== 'expanded' && !force)) return
     const active = doc.activeElement
+    const previous = mode
+    const previousGeometry = geometry()
+    const previousBall = { x: parseFloat(badge.style.left), y: parseFloat(badge.style.top), width: 40, height: 40, radius: 20 }
+    const crossing = animate && (previous === 'hidden') !== (next === 'hidden')
+    if (!crossing) morph.cancel()
     clearIdle()
     mode = next
-    minimized = mode !== 'expanded'
+    // Hiding preserves the presentation that is currently shrinking into the whale.
+    if (mode !== 'hidden') minimized = mode === 'compact'
     surface.chat.toggleAttribute('data-dsh-chat-minimized', minimized)
     surface.chat.toggleAttribute('data-dsh-chat-hidden', mode === 'hidden')
     if (mode === 'hidden') {
@@ -206,8 +217,31 @@ export function installFullView(doc, input = {}, activity = null) {
       }
     }
     updateGeometry()
+    const wantsFocus = focus || (mode === 'compact' && withinChat(active) && !composer?.seat.contains(active))
+    const restoreAccessibility = () => {
+      for (const key of ['inert', 'aria-hidden']) {
+        const value = savedAccessibility?.[key]
+        if (value === null || value === undefined) surface.chat.removeAttribute(key)
+        else surface.chat.setAttribute(key, value)
+      }
+    }
+    const g = mode === 'hidden' ? previousGeometry : geometry()
+    const chat = surface.chat
+    const b = bounds()
+    morphViewport = [b.left, b.top, b.width, b.height].join(':')
+    const animated = crossing && morph.start({
+      frame: surface.frame, chat, badge,
+      full: { x: g.x, y: g.y, width: g.width, height: g.visibleHeight, radius: minimized ? 24 : 14 },
+      ball: mode === 'hidden' ? { x: parseFloat(badge.style.left), y: parseFloat(badge.style.top), width: 40, height: 40, radius: 20 } : previousBall,
+      hide: mode === 'hidden',
+      onFinish: () => {
+        if (disposed || surface?.chat !== chat) return
+        if (mode !== 'hidden') { restoreAccessibility(); if (wantsFocus) focusEditor() }
+      },
+    })
+    if (animated && mode !== 'hidden') { chat.setAttribute('inert', ''); chat.setAttribute('aria-hidden', 'true') }
     if (mode === 'hidden' && focusRecovery) badge.focus({ preventScroll: true })
-    else if (focus || (mode === 'compact' && withinChat(active) && !composer?.seat.contains(active))) focusEditor()
+    else if (!animated && wantsFocus) focusEditor()
     syncIdle()
   }
   const returnSplit = () => {
@@ -256,6 +290,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (!drag || event.pointerId !== drag.pointerId) return
     const dx = event.clientX - drag.startX, dy = event.clientY - drag.startY
     if (!drag.moved && Math.hypot(dx, dy) <= 4) return
+    if (!drag.moved) morph.finish()
     drag.moved = true
     suppressEdgeClick = suppressChromeClick = true
     const g = drag.geometry
@@ -275,9 +310,11 @@ export function installFullView(doc, input = {}, activity = null) {
       const threshold = 24
       let x = g.x, y = g.y
       const right = b.left + b.width - g.width - gap, bottom = b.top + b.height - g.visibleHeight - gap
-      if (Math.abs(x - b.left - gap) <= threshold) x = b.left + gap
+      const left = b.left + gap - (mode === 'hidden' ? Math.max(0, g.width - 40) : 0)
+      const top = b.top + gap - (mode === 'hidden' ? Math.max(0, g.visibleHeight - 40) : 0)
+      if (Math.abs(x - left) <= threshold) x = left
       if (Math.abs(x - right) <= threshold) x = right
-      if (Math.abs(y - b.top - gap) <= threshold) y = b.top + gap
+      if (Math.abs(y - top) <= threshold) y = top
       if (Math.abs(y - bottom) <= threshold) y = bottom
       preferred = { width: g.width, height: g.height, x, y: y - g.offset }
     }
@@ -301,6 +338,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const moveWithKeyboard = event => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
     event.preventDefault(); event.stopPropagation()
+    morph.finish()
     const g = geometry(), step = event.shiftKey ? 48 : 16
     preferred = { width: g.width, height: g.height, x: g.x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0), y: g.y - g.offset + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0) }
     const result = geometry()
@@ -476,6 +514,7 @@ export function installFullView(doc, input = {}, activity = null) {
   }
   const resizeObserver = typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(() => schedule()) : null
   const restore = () => {
+    morph.cancel()
     if (!surface) return
     if (drag) finishPointer(null, true)
     clearEdgeClick()
@@ -549,7 +588,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (edge.parentElement !== surface.chat) surface.chat.append(edge)
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
-    if (nextSession !== sessionId) { composing = false; sessionId = nextSession; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true }) }
+    if (nextSession !== sessionId) { composing = false; sessionId = nextSession; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true, animate: false }) }
     syncApproval()
     syncActivity()
     const nextHeader = surface.chat.querySelector('[data-conversation-header-leading]')?.closest('header')
@@ -586,7 +625,11 @@ export function installFullView(doc, input = {}, activity = null) {
     if (surface && mode === 'expanded' && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !popupOpen()) setMode('compact')
   }
   const observer = new win.MutationObserver(records => {
-    if (records.some(record => record.type === 'childList' || record.type === 'characterData' || !record.attributeName.startsWith('data-dsh-'))) schedule()
+    if (records.some(record => {
+      if (record.target.hasAttribute?.('data-dsh-whale-morph-shell')) return false
+      if (morph.running && record.attributeName === 'style' && (record.target === surface?.chat || record.target === badge)) return false
+      return record.type === 'childList' || record.type === 'characterData' || !record.attributeName.startsWith('data-dsh-')
+    })) schedule()
   })
   observer.observe(doc.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-rightbar-fullscreen', 'data-sidebar-right-panel', 'data-sidebar-right-open', 'data-conversation-session', 'data-approval-key', 'data-question-key', 'data-plan-review-key', 'hidden', 'data-sidebar-collapsed', 'aria-hidden', 'aria-expanded', 'inert', 'style', 'class'] })
   observer.observe(doc.head, { childList: true, subtree: true, characterData: true })

@@ -823,3 +823,162 @@ test('隐藏鲸鱼球区分问题和计划确认，恢复时聚焦原待办输�
     assert.equal(f.document.activeElement, plan.querySelector('button'))
   } finally { dispose(); f.dom.window.close() }
 })
+
+function motionClock(f, reduced = false) {
+  let next = 0
+  const callbacks = new Map()
+  f.dom.window.matchMedia = () => ({ matches: reduced })
+  f.dom.window.requestAnimationFrame = fn => { callbacks.set(++next, fn); return next }
+  f.dom.window.cancelAnimationFrame = id => callbacks.delete(id)
+  return time => {
+    const batch = [...callbacks.values()]; callbacks.clear()
+    for (const fn of batch) fn(time)
+  }
+}
+
+test('完整小窗连续缩入球：内容不重排、外框收拢到同一锚点、鱼尾在末段出现', async () => {
+  const f = composerFixture(); const step = motionClock(f); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); step(0)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    const draft = f.document.getElementById('draft')
+    const y = f.chat.style.getPropertyValue('--dsh-fv-y')
+    f.document.querySelector('[data-dsh-minimize-chat]').click(); step(0)
+    const shell = f.document.querySelector('[data-dsh-whale-morph-shell]')
+    assert.ok(shell, '由连续外框衔接原小窗和鲸鱼球')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(f.chat.style.getPropertyValue('--dsh-fv-y'), y)
+    const right = parseFloat(shell.style.left) + parseFloat(shell.style.width)
+    const bottom = parseFloat(shell.style.top) + parseFloat(shell.style.height)
+    const initialWidth = parseFloat(shell.style.width)
+    step(140)
+    assert.ok(parseFloat(shell.style.width) < initialWidth)
+    assert.ok(parseFloat(shell.style.width) > 40)
+    assert.ok(Math.abs(parseFloat(shell.style.left) + parseFloat(shell.style.width) - right) < .1)
+    assert.ok(Math.abs(parseFloat(shell.style.top) + parseFloat(shell.style.height) - bottom) < .1)
+    assert.equal(f.chat.style.getPropertyValue('--dsh-morph-content-opacity'), '0')
+    assert.equal(f.document.querySelector('[data-dsh-restore-chat]').style.getPropertyValue('--dsh-morph-whale-opacity'), '0')
+    step(370)
+    assert.ok(Number(f.document.querySelector('[data-dsh-restore-chat]').style.getPropertyValue('--dsh-morph-whale-opacity')) > 0)
+    step(460)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    assert.equal(f.chat.hasAttribute('inert'), true)
+    assert.equal(f.document.getElementById('draft'), draft)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('连续缩入可在半途中反向恢复，完成后归还原输入焦点；退出取消全部动画', async () => {
+  const f = composerFixture(); const step = motionClock(f); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); step(0)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click(); step(0); step(140)
+    const shell = f.document.querySelector('[data-dsh-whale-morph-shell]')
+    assert.ok(shell)
+    const current = [shell.style.left, shell.style.top, shell.style.width, shell.style.height]
+    f.document.querySelector('[data-dsh-restore-chat]').click(); step(140)
+    assert.deepEqual([shell.style.left, shell.style.top, shell.style.width, shell.style.height], current, '反向从当前帧继续')
+    step(600)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.chat.hasAttribute('inert'), false)
+    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
+    f.document.querySelector('[data-dsh-minimize-chat]').click(); step(600)
+    f.exit(); await settle(); step(620); step(1100)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morphing]'), null)
+    assert.equal(f.chat.hasAttribute('inert'), false)
+    assert.equal(f.chat.style.getPropertyValue('--dsh-morph-content-opacity'), '')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('减少动态效果直接切换鲸鱼球，恢复不等待动画且仍保留草稿', async () => {
+  const f = composerFixture(); const step = motionClock(f, true); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); step(0)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    f.document.querySelector('[data-dsh-restore-chat]').click()
+    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
+    assert.equal(f.document.getElementById('draft').textContent, '正在编辑的草稿')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('紧凑条自动回收也连续缩入，动画不抢工作区焦点', async () => {
+  const f = composerFixture(); const step = motionClock(f)
+  let idle
+  f.dom.window.setTimeout = fn => { idle = fn; return 10 }
+  f.dom.window.clearTimeout = () => { idle = null }
+  const dispose = install(f.document, { compactIdleSeconds: 10 })
+  try {
+    f.enter(); await settle(); step(0)
+    const work = f.document.createElement('button'); f.frame.append(work); work.focus()
+    idle(); step(0)
+    const shell = f.document.querySelector('[data-dsh-whale-morph-shell]')
+    assert.ok(shell)
+    assert.equal(shell.style.height, '48px')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    step(200)
+    assert.ok(parseFloat(shell.style.width) > 40)
+    assert.equal(f.document.activeElement, work)
+    step(500)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.document.activeElement, work)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('动画中工作区改变尺寸会安全结束动画，恢复聊天不残留 inert 或旧外框', async () => {
+  const f = composerFixture(); const step = motionClock(f); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); step(0)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click(); step(0); step(500)
+    f.document.querySelector('[data-dsh-restore-chat]').click(); step(500); step(600)
+    assert.ok(f.document.querySelector('[data-dsh-whale-morph-shell]'))
+    f.frame.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1000, bottom: 640, width: 1000, height: 640 })
+    f.dom.window.dispatchEvent(new f.dom.window.Event('resize')); step(620)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.chat.hasAttribute('inert'), false)
+    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('动画中切换会话直接清理旧外框，不延迟夺走新会话之外的焦点', async () => {
+  const f = composerFixture(); const step = motionClock(f); const dispose = install(f.document)
+  try {
+    f.enter(); await settle(); step(0)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click(); step(0); step(140)
+    const work = f.document.createElement('button'); f.frame.append(work); work.focus()
+    f.chat.querySelector('[data-conversation-session]').setAttribute('data-conversation-session', 's2')
+    f.panel.closest('[data-sidebar-right-session]').setAttribute('data-sidebar-right-session', 's2')
+    await settle(); step(160)
+    assert.equal(f.document.querySelector('[data-dsh-whale-morph-shell]'), null)
+    assert.equal(f.chat.hasAttribute('inert'), false)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    step(700)
+    assert.equal(f.document.activeElement, work)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('完整小窗隐藏后鲸鱼球仍可移动到工作区左上边缘，恢复窗口保持在工作区内', async () => {
+  const f = composerFixture(); const dispose = install(f.document, { edgeGap: 16 })
+  try {
+    f.enter(); await settle()
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const badge = f.document.querySelector('[data-dsh-restore-chat]')
+    for (let i = 0; i < 30; i++) {
+      for (const key of ['ArrowUp', 'ArrowLeft']) badge.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key, shiftKey: true, bubbles: true, cancelable: true }))
+    }
+    assert.equal(badge.style.left, '296px')
+    assert.equal(badge.style.top, '16px')
+    badge.click()
+    assert.ok(parseFloat(f.chat.style.getPropertyValue('--dsh-fv-x')) >= 296)
+    assert.ok(parseFloat(f.chat.style.getPropertyValue('--dsh-fv-y')) >= 16)
+    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
+  } finally { dispose(); f.dom.window.close() }
+})

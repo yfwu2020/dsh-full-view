@@ -19,8 +19,7 @@ export const style = `
   box-shadow: 0 12px 40px #0002, 0 2px 8px #0001; overflow: hidden;
   --dsh-frame-leading-clearance: 0px;
   --dsh-fv-input-icon-size: 18px;
-  animation: dsh-fv-appear 180ms ease-out;
-  transition: top 280ms cubic-bezier(.22, 1, .36, 1), height 280ms cubic-bezier(.22, 1, .36, 1), border-radius 240ms ease, opacity 180ms ease, transform 240ms ease, visibility 0s;
+  transition: top 280ms cubic-bezier(.22, 1, .36, 1), height 280ms cubic-bezier(.22, 1, .36, 1), border-radius 240ms ease;
   transform-origin: bottom right;
 }
 [data-dsh-floating-chat] > :not([data-dsh-full-view-toolbar]):not([data-dsh-full-view-resize]):not([data-dsh-full-view-edge]) {
@@ -128,14 +127,32 @@ export const style = `
 [data-dsh-chat-composer][data-dsh-chat-minimized] [data-dsh-full-view-composer-card] { box-shadow: none !important; background: transparent; }
 [data-dsh-full-view-toolbar] [data-dsh-move-chat] { font-size: 20px; cursor: grab; touch-action: none; }
 [data-dsh-full-view-toolbar] button:disabled { opacity: .35; cursor: default; }
-[data-dsh-floating-chat][data-dsh-chat-hidden] { opacity: 0; transform: translateY(8px) scale(.96); visibility: hidden; pointer-events: none; transition-delay: 0s, 0s, 0s, 0s, 0s, 240ms; }
+[data-dsh-floating-chat][data-dsh-chat-hidden] { opacity: 0; visibility: hidden; pointer-events: none; transition: none; }
 [data-dsh-restore-chat] {
   position: absolute; z-index: 51; box-sizing: border-box; width: 40px; height: 40px;
   appearance: none; display: flex; align-items: center; justify-content: center; padding: 7px;
   border: 1px solid var(--dsw-alias-border-l3, #ddd); border-radius: 50% !important; corner-shape: round;
   color: var(--dsw-focus-ring-color, #5686fe); background: var(--dsw-alias-bg-base, #fff);
   box-shadow: 0 4px 18px #0002; cursor: pointer; touch-action: none; -webkit-app-region: no-drag;
-  transition: opacity 180ms ease, transform 240ms cubic-bezier(.22, 1, .36, 1), visibility 0s;
+  transition: none;
+}
+/* The shell alone changes size; the host messages and editor never reflow. */
+[data-dsh-whale-morph-shell] {
+  position: absolute; z-index: 49; box-sizing: border-box; pointer-events: none;
+  background: var(--dsw-alias-bg-base, #fff); border: 1px solid var(--dsw-alias-border-l3, #ddd);
+  box-shadow: 0 12px 40px #0002, 0 2px 8px #0001; overflow: hidden;
+  will-change: left, top, width, height, border-radius;
+}
+[data-dsh-floating-chat][data-dsh-whale-morphing] {
+  background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+  opacity: var(--dsh-morph-content-opacity, 1) !important; visibility: visible !important;
+  transform: translate(var(--dsh-morph-content-x, 0px), var(--dsh-morph-content-y, 0px)) !important;
+  clip-path: inset(0 var(--dsh-morph-clip-right, 0px) var(--dsh-morph-clip-bottom, 0px) 0 round var(--dsh-morph-radius, 14px));
+  transition: none !important; animation: none !important; pointer-events: none !important;
+}
+[data-dsh-restore-chat][data-dsh-whale-morphing] {
+  opacity: var(--dsh-morph-whale-opacity, 0) !important; visibility: visible !important;
+  transform: translate(var(--dsh-morph-whale-x, 0px), var(--dsh-morph-whale-y, 0px)) !important; transition: none !important;
 }
 [data-dsh-whale-icon] {
   display: block; width: 24px; height: 24px; background: currentColor;
@@ -156,7 +173,7 @@ export const style = `
     mask-image: var(--dsh-fv-whale-motion);
   }
 }
-[data-dsh-restore-chat][hidden] { display: flex !important; opacity: 0; transform: scale(.75); visibility: hidden; pointer-events: none; transition-delay: 0s, 0s, 180ms; }
+[data-dsh-restore-chat][hidden] { display: flex !important; opacity: 0; visibility: hidden; pointer-events: none; }
 [data-dsh-processing-status][hidden] { display: none !important; }
 [data-dsh-restore-chat]:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, #5686fe); outline-offset: 2px; }
 [data-dsh-processing] [data-composer-placeholder] { visibility: hidden !important; }
@@ -177,7 +194,6 @@ export const style = `
 @starting-style {
   [data-dsh-full-view-toolbar] { opacity: 0; }
 }
-@keyframes dsh-fv-appear { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   [data-dsh-floating-chat], [data-dsh-restore-chat], [data-dsh-full-view-toolbar] { animation: none; transition: none; }
 }
