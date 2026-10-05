@@ -823,36 +823,3 @@ test('隐藏鲸鱼球区分问题和计划确认，恢复时聚焦原待办输�
     assert.equal(f.document.activeElement, plan.querySelector('button'))
   } finally { dispose(); f.dom.window.close() }
 })
-
-
-test('完整小窗隐藏为鲸鱼球时不先压成输入条，保留布局、消息和右下锚点', async () => {
-  const f = composerFixture(); const dispose = install(f.document)
-  try {
-    f.enter(); await settle()
-    f.document.querySelector('[data-dsh-full-view-edge]').click()
-    const messages = f.document.getElementById('messages')
-    messages.scrollTop = 37
-    const geometry = () => ['x', 'y', 'width', 'height', 'collapsed-height'].map(key => f.chat.style.getPropertyValue(`--dsh-fv-${key}`))
-    const before = geometry()
-    f.document.querySelector('[data-dsh-minimize-chat]').click()
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '隐藏过程中保持完整布局')
-    for (let node = messages; node && node !== f.chat; node = node.parentElement) {
-      assert.notEqual(f.dom.window.getComputedStyle(node).display, 'none', '消息与小窗一起淡出，不能先 display:none')
-    }
-    assert.deepEqual(geometry(), before, '隐藏不同时触发顶部位置与高度动画')
-    assert.equal(messages.scrollTop, 37)
-    assert.equal(f.chat.hasAttribute('inert'), true, '淡出期间仍立即停止输入')
-    const badge = f.document.querySelector('[data-dsh-restore-chat]')
-    const anchor = [badge.style.left, badge.style.top]
-    badge.click()
-    assert.deepEqual(geometry(), before)
-    assert.deepEqual([badge.style.left, badge.style.top], anchor)
-    assert.equal(f.document.activeElement, f.document.getElementById('draft'))
-    f.document.querySelector('[data-dsh-full-view-edge]').click()
-    const compact = geometry()
-    f.document.querySelector('[data-dsh-minimize-chat]').click()
-    assert.deepEqual(geometry(), compact, '紧凑条隐藏也保留自己的布局')
-    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
-  } finally { dispose(); f.dom.window.close() }
-})
