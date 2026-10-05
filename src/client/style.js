@@ -164,6 +164,7 @@ export const style = `
   border-radius: 50%; corner-shape: round; background: currentColor; pointer-events: none;
   box-shadow: 0 0 0 2px var(--dsw-alias-bg-base, #fff);
 }
+[data-dsh-whale-status][hidden] { display: none !important; }
 [data-dsh-whale-status][data-state="ongoing"] { color: var(--dsw-alias-label-tertiary); }
 [data-dsh-whale-status][data-state="done"] { color: var(--dsw-alias-state-success-primary); }
 [data-dsh-whale-status][data-state="warning"] { color: var(--dsw-alias-state-warn-primary); }

@@ -982,3 +982,68 @@ test('完整小窗隐藏后鲸鱼球仍可移动到工作区左上边缘，恢�
     assert.equal(f.document.activeElement, f.document.getElementById('draft'))
   } finally { dispose(); f.dom.window.close() }
 })
+
+test('完成小点只提醒未查看回合：打开后再收起不重现，新回合完成重新提示', async () => {
+  const f = composerFixture(), activity = activityFixture(), dispose = install(f.document, {}, activity)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const badge = f.document.querySelector('[data-dsh-restore-chat]'), dot = badge.querySelector('[data-dsh-whale-status]')
+    activity.update({ running: false, completed: true, completionId: 'turn-1', completionUnread: false }); await settle()
+    assert.equal(dot.hidden, false, '隐藏时刚完成，即使宿主清除 unread 仍需提醒')
+    badge.click()
+    assert.equal(dot.hidden, true, '打开查看即清除完成提醒')
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    activity.update({ running: false, completed: true, completionId: 'turn-1', completionUnread: false }); await settle()
+    assert.equal(dot.hidden, true, '同一结束事件或重绘不重发提醒')
+    activity.update({ running: true, completed: false, completionId: null }); await settle()
+    assert.equal(dot.hidden, false)
+    assert.equal(dot.getAttribute('data-state'), 'ongoing')
+    activity.update({ running: false, completed: true, completionId: 'turn-2', completionUnread: false }); await settle()
+    assert.equal(dot.hidden, false)
+    assert.equal(dot.getAttribute('data-state'), 'done')
+    badge.click()
+    activity.update({ running: false, completed: true, completionId: 'turn-2', pending: true, pendingKind: 'question' }); await settle()
+    assert.equal(dot.hidden, false, '待回应提示不随完成提醒一起被清除')
+    assert.equal(dot.getAttribute('data-state'), 'warning')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('历史已读完成和展开时完成不显示完成点，宿主明确未读仍可提示', async () => {
+  const f = composerFixture(), activity = activityFixture()
+  activity.update({ running: false, completed: true, completionId: 'old', completionUnread: false })
+  const dispose = install(f.document, {}, activity)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-minimize-chat]').click()
+    const badge = f.document.querySelector('[data-dsh-restore-chat]'), dot = badge.querySelector('[data-dsh-whale-status]')
+    assert.equal(dot.hidden, true, '不能把历史完成当成未读')
+    badge.click()
+    activity.update({ running: true, completed: false }); await settle()
+    activity.update({ running: false, completed: true, completionId: 'new', completionUnread: false }); await settle()
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(dot.hidden, true, '完整小窗正在展示的结果已查看')
+  } finally { dispose(); f.dom.window.close() }
+  const g = composerFixture(), host = activityFixture()
+  host.update({ running: false, completed: true, completionId: 'unread', completionUnread: true })
+  const close = install(g.document, {}, host)
+  try {
+    g.enter(); await settle(); g.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(g.document.querySelector('[data-dsh-whale-status]').hidden, false)
+  } finally { close(); g.dom.window.close() }
+})
+
+test('点击切换到会话也清除它的完成提醒，不与其他会话串状态', async () => {
+  const f = composerFixture(), activity = activityFixture(), dispose = install(f.document, {}, activity)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-minimize-chat]').click()
+    activity.update({ running: false, completed: true, completionId: 's1-turn-1' }); await settle()
+    assert.equal(f.document.querySelector('[data-dsh-whale-status]').hidden, false)
+    for (const [id, turn] of [['s2', 's2-turn-1'], ['s1', 's1-turn-1']]) {
+      activity.update({ running: false, completed: true, completionId: turn, completionUnread: true })
+      f.chat.querySelector('[data-conversation-session]').setAttribute('data-conversation-session', id)
+      f.panel.closest('[data-sidebar-right-session]').setAttribute('data-sidebar-right-session', id)
+      await settle()
+      f.document.querySelector('[data-dsh-minimize-chat]').click()
+      assert.equal(f.document.querySelector('[data-dsh-whale-status]').hidden, true, '选中会话即视为已查看')
+    }
+  } finally { dispose(); f.dom.window.close() }
+})

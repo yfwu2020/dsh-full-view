@@ -47,6 +47,7 @@ export function installFullView(doc, input = {}, activity = null) {
   let savedAccessibility = null
   let morphViewport = ''
   let sessionId = null
+  const completionReminders = new Map()
   let suppressChromeClick = false
   let edgeClickTimer = null
   let idleTimer = null
@@ -242,6 +243,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (animated && mode !== 'hidden') { chat.setAttribute('inert', ''); chat.setAttribute('aria-hidden', 'true') }
     if (mode === 'hidden' && focusRecovery) badge.focus({ preventScroll: true })
     else if (!animated && wantsFocus) focusEditor()
+    syncActivity()
     syncIdle()
   }
   const returnSplit = () => {
@@ -495,7 +497,21 @@ export function installFullView(doc, input = {}, activity = null) {
     const running = state.running && !state.pending && !approvalState
     badge.toggleAttribute('data-dsh-running', running)
     const status = state.pending || approvalState ? 'warning' : running ? 'ongoing' : state.completed ? 'done' : 'idle'
-    badge.querySelector('[data-dsh-whale-status]').setAttribute('data-state', status)
+    const completionId = state.completed ? state.completionId ?? 'completed' : null
+    let reminder = completionReminders.get(sessionId)
+    if (!reminder) {
+      // Only the host can identify an already-unread result at initial entry.
+      reminder = { id: completionId, unread: state.completionUnread === true }
+      completionReminders.set(sessionId, reminder)
+    } else if (completionId && completionId !== reminder.id) {
+      reminder.id = completionId
+      reminder.unread = true
+    }
+    if (mode === 'expanded' && state.completed) reminder.unread = false
+    const dot = badge.querySelector('[data-dsh-whale-status]')
+    dot.setAttribute('data-state', status)
+    const hideCompletion = status === 'done' && !reminder.unread
+    if (dot.hidden !== hideCompletion) dot.hidden = hideCompletion
     const pendingKind = state.pendingKind ?? approvalState?.kind
     const statusLabel = status === 'warning' ? pendingKind === 'question' ? '等待回答' : pendingKind === 'plan-review' ? '等待计划确认' : '等待确认'
       : status === 'ongoing' ? '正在处理' : status === 'done' ? '已完成' : '空闲'
@@ -521,6 +537,7 @@ export function installFullView(doc, input = {}, activity = null) {
     clearIdle()
     composing = false
     stopClock()
+    completionReminders.delete(sessionId)
     activity?.setSession(null)
     clearComposer()
     resizeObserver?.disconnect()
@@ -588,7 +605,13 @@ export function installFullView(doc, input = {}, activity = null) {
     if (edge.parentElement !== surface.chat) surface.chat.append(edge)
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
-    if (nextSession !== sessionId) { composing = false; sessionId = nextSession; approvalState = null; setMode(composer ? 'compact' : 'expanded', { force: true, animate: false }) }
+    if (nextSession !== sessionId) {
+      composing = false; sessionId = nextSession; approvalState = null
+      activity?.setSession(sessionId)
+      const state = activity?.getSnapshot()
+      completionReminders.set(sessionId, { id: state?.completed ? state.completionId ?? 'completed' : null, unread: false })
+      setMode(composer ? 'compact' : 'expanded', { force: true, animate: false })
+    }
     syncApproval()
     syncActivity()
     const nextHeader = surface.chat.querySelector('[data-conversation-header-leading]')?.closest('header')

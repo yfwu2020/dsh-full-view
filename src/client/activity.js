@@ -35,7 +35,13 @@ export function createActivitySource(ctx) {
       const startedAt = running && !completed && Number.isFinite(start?.time) ? start.time : null
       // Main-view retention clears the host's unread reminder even while the
       // plugin has hidden the chat. Keep the latest ended turn distinguishable.
-      return { running, pending, pendingKind, completed: !running && (state?.completionUnread === true || !!completed), startedAt }
+      return {
+        running, pending, pendingKind,
+        completed: !running && (state?.completionUnread === true || !!completed),
+        completionId: completed ? JSON.stringify([end.data.turn, end.time]) : null,
+        completionUnread: state?.completionUnread === true,
+        startedAt,
+      }
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
     dispose() {
