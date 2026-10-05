@@ -510,8 +510,8 @@ export function installFullView(doc, input = {}, activity = null) {
     if (mode === 'expanded' && state.completed) reminder.unread = false
     const dot = badge.querySelector('[data-dsh-whale-status]')
     dot.setAttribute('data-state', status)
-    const hideCompletion = status === 'done' && !reminder.unread
-    if (dot.hidden !== hideCompletion) dot.hidden = hideCompletion
+    const hideDot = status === 'ongoing' || (status === 'done' && !reminder.unread)
+    if (dot.hidden !== hideDot) dot.hidden = hideDot
     const pendingKind = state.pendingKind ?? approvalState?.kind
     const statusLabel = status === 'warning' ? pendingKind === 'question' ? '等待回答' : pendingKind === 'plan-review' ? '等待计划确认' : '等待确认'
       : status === 'ongoing' ? '正在处理' : status === 'done' ? '已完成' : '空闲'

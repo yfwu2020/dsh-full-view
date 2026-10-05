@@ -79,7 +79,7 @@
 
 通过宿主 `uiSession.sessionStatus` 读取运行、`pendingInteraction.kind` 和完成提醒；等待回应优先于运行，运行优先于完成，最后为空闲。标题在当前主会话被保留时会清除 `completionUnread`，因此同时核对最新匹配的 `turn/start` / `turn/end`，区分真实回合完成；完成点是否显示还需通过未读判断。新的运行和切换会话不会继承之前的完成状态。
 
-6px 小点位于 40px 球内的 top/right 7px。颜色直接引用原生 StateDot 的 `--dsw-alias-label-tertiary`（ongoing）、`--dsw-alias-state-success-primary`（done）、`--dsw-alias-state-warn-primary`（warning）、`--dsw-alias-state-idle-primary`（idle）。状态点不拦截鼠标，不显示文字或悬停标题，辅助标签区分等待回答、审批和计划确认。
+运行状态保留动画标记和辅助标签，但隐藏小点；待回应优先于运行，仍显示提醒点。6px 小点位于 40px 球内的 top/right 7px。颜色直接引用原生 StateDot 的 `--dsw-alias-label-tertiary`（ongoing）、`--dsw-alias-state-success-primary`（done）、`--dsw-alias-state-warn-primary`（warning）、`--dsw-alias-state-idle-primary`（idle）。状态点不拦截鼠标，不显示文字或悬停标题，辅助标签区分等待回答、审批和计划确认。
 
 原本隐藏的会话出现待办时保留鲸鱼球；点击恢复展开原控件，并优先聚焦待办的输入控件或操作按钮。紧凑条遇到待办仍展开。已展开待办处理前禁止再次隐藏，处理后恢复原形态。显示时 visibility 立即生效，隐藏时延迟至淡出结束，避免动画开始时拒绝输入焦点。
 

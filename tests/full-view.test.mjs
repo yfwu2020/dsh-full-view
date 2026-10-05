@@ -759,7 +759,7 @@ test('浮窗隐藏聊天和草稿滚动条并释放占位，原滚动容器及�
 })
 
 
-test('鲸鱼右上状态点使用标题原生色：待回应优先于运行，完成与空闲可区分', async () => {
+test('鲸鱼运行时不显示小点，待回应优先并保留标题原生状态色', async () => {
   const f = composerFixture(), activity = activityFixture(), dispose = install(f.document, {}, activity)
   const native = f.document.createElement('span'); f.document.body.append(native)
   const hostTheme = f.document.createElement('style')
@@ -780,9 +780,11 @@ test('鲸鱼右上状态点使用标题原生色：待回应优先于运行，�
     assert.equal(f.dom.window.getComputedStyle(dot).right, '7px')
     activity.update({ running: true, completed: true, pending: false }); await settle()
     check('ongoing', '--dsw-alias-label-tertiary'); assert.equal(badge.hasAttribute('data-dsh-running'), true)
+    assert.equal(dot.hidden, true, '运行时只显示鱼尾动画')
     activity.update({ running: true, completed: true, pending: true, pendingKind: 'question' }); await settle()
     check('warning', '--dsw-alias-state-warn-primary'); assert.match(badge.getAttribute('aria-label'), /等待回答/)
     assert.equal(badge.hasAttribute('data-dsh-running'), false)
+    assert.equal(dot.hidden, false, '运行中需要回答时仍显示提醒点')
     activity.update({ running: false, pending: false, completed: true }); await settle()
     check('done', '--dsw-alias-state-success-primary'); assert.match(badge.getAttribute('aria-label'), /已完成/)
     hostTheme.textContent = ':root { --dsw-alias-state-success-primary: rgb(80, 200, 100); }'; await settle()
@@ -996,7 +998,8 @@ test('完成小点只提醒未查看回合：打开后再收起不重现，新�
     activity.update({ running: false, completed: true, completionId: 'turn-1', completionUnread: false }); await settle()
     assert.equal(dot.hidden, true, '同一结束事件或重绘不重发提醒')
     activity.update({ running: true, completed: false, completionId: null }); await settle()
-    assert.equal(dot.hidden, false)
+    assert.equal(dot.hidden, true)
+    assert.equal(badge.hasAttribute('data-dsh-running'), true)
     assert.equal(dot.getAttribute('data-state'), 'ongoing')
     activity.update({ running: false, completed: true, completionId: 'turn-2', completionUnread: false }); await settle()
     assert.equal(dot.hidden, false)
