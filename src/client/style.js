@@ -172,6 +172,8 @@ export const style = `
 @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
   [data-dsh-restore-chat][data-dsh-running] [data-dsh-whale-icon] {
     mask-image: var(--dsh-fv-whale-motion);
+    /* Native APNG is 28px, intended for a 14px glyph on a 2x display. */
+    mask-size: 14px 14px;
   }
 }
 [data-dsh-restore-chat][hidden] { display: flex !important; opacity: 0; visibility: hidden; pointer-events: none; }

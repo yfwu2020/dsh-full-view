@@ -29,10 +29,25 @@ test('鲸鱼图形直接引用宿主样式中的动画，换宿主资源时同�
   document.head.append(style)
   syncNativeWhale(document,badge)
   assert.equal(badge.style.getPropertyValue('--dsh-fv-whale-motion'), `url("${motion}")`)
-  const still = badge.style.getPropertyValue('--dsh-fv-whale-still').match(/base64,([^" ]+)/)[1]
-  assert.deepEqual([...Buffer.from(still,'base64')], stillFrame(bytes))
+  const still = badge.style.getPropertyValue('--dsh-fv-whale-still')
+  assert.match(still, /^url\("data:image\/svg\+xml,/)
+  const svg = new dom.window.DOMParser().parseFromString(decodeURIComponent(still.slice('url("data:image/svg+xml,'.length, -2)), 'image/svg+xml')
+  assert.equal(svg.querySelector('parsererror'), null)
+  assert.equal(svg.documentElement.getAttribute('viewBox'), '0 0 16 16')
+  assert.ok(svg.querySelector('path[d][stroke]'))
   assert.equal(style.textContent, `.hostIcon{mask:url(${motion}) 50%/100% 100% no-repeat alpha}`)
   style.remove(); syncNativeWhale(document,badge)
   assert.equal(badge.style.getPropertyValue('--dsh-fv-whale-motion'), `url("${motion}")`)
   dom.window.close()
+})
+
+
+test('没有挂载宿主运行组件时，也使用原生矢量静止图，不等待下一次运行', () => {
+  const dom = new JSDOM('<body><button></button></body>')
+  try {
+    const { document } = dom.window, badge = document.querySelector('button')
+    syncNativeWhale(document, badge)
+    assert.match(badge.style.getPropertyValue('--dsh-fv-whale-still'), /^url\("data:image\/svg\+xml,/)
+    assert.equal(badge.style.getPropertyValue('--dsh-fv-whale-motion'), '')
+  } finally { dom.window.close() }
 })
