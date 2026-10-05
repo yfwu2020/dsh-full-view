@@ -82,3 +82,8 @@
 6px 小点位于 40px 球内的 top/right 7px。颜色直接引用原生 StateDot 的 `--dsw-alias-label-tertiary`（ongoing）、`--dsw-alias-state-success-primary`（done）、`--dsw-alias-state-warn-primary`（warning）、`--dsw-alias-state-idle-primary`（idle）。状态点不拦截鼠标，不显示文字或悬停标题，辅助标签区分等待回答、审批和计划确认。
 
 原本隐藏的会话出现待办时保留鲸鱼球；点击恢复展开原控件，并优先聚焦待办的输入控件或操作按钮。紧凑条遇到待办仍展开。已展开待办处理前禁止再次隐藏，处理后恢复原形态。显示时 visibility 立即生效，隐藏时延迟至淡出结束，避免动画开始时拒绝输入焦点。
+
+
+### 隐藏过渡与呈现形态分离
+
+`hidden` 只改变可见性和可交互性，保留进入隐藏前的 `minimized` 呈现形态。几何计算与工具栏沿用该呈现形态，不因隐藏把完整消息区提前设成 display:none，也不把完整窗口重新压成紧凑高度。小窗与恢复球仍在共同的右下锚点交叉淡出 / 淡入；原聊天立即 inert，防止淡出期间继续操作。恢复原先完整小窗时不再先从紧凑高度展开；原先紧凑条的隐藏和闲置回收沿用紧凑布局。

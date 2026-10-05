@@ -90,8 +90,8 @@ export function installFullView(doc, input = {}, activity = null) {
     const gap = Math.min(config.edgeGap, Math.max(0, Math.min(b.width, b.height) / 8))
     const width = Math.max(0, Math.min(Math.max(280, preferred.width), b.width - 2 * gap))
     const height = Math.max(0, Math.min(Math.max(240, preferred.height), b.height - 2 * gap))
-    const visibleHeight = Math.min(height, mode === 'expanded' ? height : composer ? collapsedHeight : 36)
-    const offset = mode !== 'expanded' && composer ? height - visibleHeight : 0
+    const visibleHeight = Math.min(height, !minimized ? height : composer ? collapsedHeight : 36)
+    const offset = minimized && composer ? height - visibleHeight : 0
     const clamp = (n, lo, hi) => Math.max(lo, Math.min(n, Math.max(lo, hi)))
     return {
       width, height, visibleHeight, offset,
@@ -158,7 +158,7 @@ export function installFullView(doc, input = {}, activity = null) {
   }
   const updateGeometry = () => {
     if (!surface) return
-    const chrome = mode === 'expanded' || (mode === 'compact' && !composer)
+    const chrome = !minimized || !composer
     surface.chat.toggleAttribute('data-dsh-chat-chrome', chrome)
     if (composer) collapsedHeight = Math.max(48, composer.seat.getBoundingClientRect().height + 2)
     const b = bounds()
@@ -191,7 +191,8 @@ export function installFullView(doc, input = {}, activity = null) {
     const active = doc.activeElement
     clearIdle()
     mode = next
-    minimized = mode !== 'expanded'
+    // Hiding changes visibility, not the presentation that is currently fading out.
+    if (mode !== 'hidden') minimized = mode === 'compact'
     surface.chat.toggleAttribute('data-dsh-chat-minimized', minimized)
     surface.chat.toggleAttribute('data-dsh-chat-hidden', mode === 'hidden')
     if (mode === 'hidden') {
