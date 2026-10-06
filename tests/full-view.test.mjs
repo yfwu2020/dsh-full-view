@@ -132,7 +132,8 @@ test('共存小窗的 Esc 跟随焦点，聊天收起保留解读及其菜单，
   overlay.innerHTML = '<div class="dsh-sel-layer"><div class="dsh-sel-panel" role="dialog" style="display:flex"><input><div role="listbox">解读模型菜单</div></div></div>'
   const panel = overlay.querySelector('.dsh-sel-panel'), input = panel.querySelector('input')
   const explanationEscape = event => {
-    if (event.key !== 'Escape' || !panel.contains(event.target)) return
+    if (event.key !== 'Escape' || panel.style.display === 'none' || event.isComposing) return
+    if (f.chat.contains(event.target) && !f.chat.hasAttribute('data-dsh-chat-minimized')) return
     event.preventDefault(); event.stopPropagation(); panel.style.display = 'none'
   }
   f.document.addEventListener('keydown', explanationEscape, true)
@@ -149,10 +150,22 @@ test('共存小窗的 Esc 跟随焦点，聊天收起保留解读及其菜单，
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '解读小窗及其菜单不拦住聊天自己的 Esc')
     assert.equal(panel.style.display, 'flex')
     assert.equal(draft.textContent, saved)
+    esc(draft)
+    assert.equal(panel.style.display, 'none', '焦点留在紧凑条时，再按 Esc 仍能退解读')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    panel.style.display = 'flex'
     f.document.querySelector('[data-dsh-full-view-edge]').click()
     input.focus(); esc(input)
     assert.equal(panel.style.display, 'none')
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '关闭解读不连带收起聊天')
+    input.blur(); esc(f.document.body)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '解读关闭后的焦点丢失不能卡住下一次 Esc')
+    panel.style.display = 'flex'; f.document.querySelector('[data-dsh-full-view-edge]').click()
+    esc(f.document.body)
+    assert.equal(panel.style.display, 'none', '焦点在两窗外时先退解读')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '一次只退一个小窗')
+    esc(f.document.body)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '下一次 Esc 再退聊天')
   } finally { f.document.removeEventListener('keydown', explanationEscape, true); dispose(); f.dom.window.close() }
 })
 

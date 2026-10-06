@@ -661,7 +661,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const keydown = event => {
     if (!surface || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return
     if (drag) { event.preventDefault(); event.stopPropagation(); finishPointer(null, true); return }
-    if (mode !== 'expanded' || approvalState || !withinChat(event.target) || popupOpen({ ignoreExplanation: true })) return
+    if (mode !== 'expanded' || approvalState || popupOpen({ ignoreExplanation: withinChat(event.target) })) return
     event.preventDefault(); event.stopPropagation()
     setMode('compact', { focus: true })
   }
