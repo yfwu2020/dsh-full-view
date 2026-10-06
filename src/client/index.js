@@ -128,7 +128,16 @@ export function installFullView(doc, input = {}, activity = null) {
   const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
   // The selection button opens its dialog after our capture-phase pointer handler.
   // Treat its own controls as a companion window even before the dialog is visible.
-  const withinExplanation = node => node instanceof win.Element && Boolean(node.closest('.dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel'))
+  const withinExplanation = node => node instanceof win.Element && Boolean(node.closest('.dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history'))
+  const setActiveWindow = owner => surface?.frame.setAttribute('data-dsh-active-floating-window', owner)
+  const recordActiveWindow = event => {
+    if (!surface || returningFocus) return
+    if (withinChat(event.target) || (event.target instanceof win.Node && badge?.contains(event.target))) setActiveWindow('chat')
+    else if (withinExplanation(event.target)) setActiveWindow('explanation')
+    // Portaled host menus retain the window that opened them.
+    else if (!(event.target instanceof win.Element && event.target.closest('[role="menu"], [role="listbox"], [data-trigger-menu]'))) setActiveWindow('none')
+  }
+  const activeWindowKey = event => { if (event.key !== 'Escape') recordActiveWindow(event) }
   const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
   const popupOpen = ({ ignoreExplanation = false } = {}) => [...doc.querySelectorAll(popupSelector)].some(node => {
     if (ignoreExplanation && node.closest('.dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history')) return false
@@ -212,6 +221,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (!crossing) morph.cancel()
     clearIdle()
     mode = next
+    if (mode !== 'expanded') setActiveWindow('none')
     // Hiding preserves the presentation that is currently shrinking into the whale.
     if (mode !== 'hidden') minimized = mode === 'compact'
     surface.chat.toggleAttribute('data-dsh-chat-minimized', minimized)
@@ -564,6 +574,7 @@ export function installFullView(doc, input = {}, activity = null) {
     clearComposer()
     resizeObserver?.disconnect()
     surface.frame.removeAttribute('data-dsh-full-view')
+    surface.frame.removeAttribute('data-dsh-active-floating-window')
     surface.frame.style.removeProperty('--dsh-fv-content-width')
     for (const marker of ['floating-chat', 'chat-minimized', 'chat-hidden', 'chat-chrome', 'chat-unread']) surface.chat.removeAttribute(`data-dsh-${marker}`)
     for (const key of ['inert', 'aria-hidden']) {
@@ -615,6 +626,7 @@ export function installFullView(doc, input = {}, activity = null) {
       buildChrome()
       surface.frame.append(badge)
       surface.frame.setAttribute('data-dsh-full-view', '')
+      setActiveWindow('none')
       surface.chat.setAttribute('data-dsh-floating-chat', '')
       syncComposer()
       setMode(composerSeat() ? 'compact' : 'expanded')
@@ -629,6 +641,7 @@ export function installFullView(doc, input = {}, activity = null) {
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
     if (nextSession !== sessionId) {
+      setActiveWindow('none')
       composing = false; pinned = false; sessionId = nextSession; approvalState = null
       activity?.setSession(sessionId)
       const state = activity?.getSnapshot()
@@ -648,6 +661,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (!disposed && raf === null) raf = win.requestAnimationFrame(sync)
   }
   const outsidePointer = event => {
+    recordActiveWindow(event)
     if (!surface || drag) return
     if (mode === 'compact' && editor()?.contains(event.target)) { setMode('expanded'); return }
     if (mode !== 'expanded' || pinned || approvalState || withinChat(event.target) || withinExplanation(event.target) || popupOpen()) return
@@ -655,18 +669,20 @@ export function installFullView(doc, input = {}, activity = null) {
   }
   const focusChanged = event => {
     if (!surface) return
+    recordActiveWindow(event)
     if (mode === 'compact' && !returningFocus && editor()?.contains(event.target)) setMode('expanded')
     else updateGeometry()
   }
   const keydown = event => {
     if (!surface || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return
     if (drag) { event.preventDefault(); event.stopPropagation(); finishPointer(null, true); return }
-    if (mode !== 'expanded' || approvalState || popupOpen({ ignoreExplanation: withinChat(event.target) })) return
+    if (mode !== 'expanded' || approvalState || popupOpen({ ignoreExplanation: surface.frame.getAttribute('data-dsh-active-floating-window') === 'chat' })) return
     event.preventDefault(); event.stopPropagation()
     setMode('compact', { focus: true })
   }
   const windowBlur = () => {
     if (drag) finishPointer(null, true)
+    if (surface && doc.activeElement?.tagName === 'IFRAME') recordActiveWindow({ target: doc.activeElement })
     // Iframe clicks do not bubble into the parent document.
     if (surface && mode === 'expanded' && !pinned && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !withinExplanation(doc.activeElement) && !popupOpen()) setMode('compact')
   }
@@ -686,6 +702,7 @@ export function installFullView(doc, input = {}, activity = null) {
   doc.addEventListener('pointerdown', outsidePointer, true)
   doc.addEventListener('focusin', focusChanged)
   doc.addEventListener('focusout', schedule)
+  doc.addEventListener('keydown', activeWindowKey, true)
   doc.addEventListener('input', inputChanged)
   for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel']) doc.addEventListener(type, userActivity, { capture: true, passive: true })
   for (const type of ['compositionstart', 'compositionend']) doc.addEventListener(type, compositionChanged)
@@ -704,6 +721,7 @@ export function installFullView(doc, input = {}, activity = null) {
     doc.removeEventListener('pointerdown', outsidePointer, true)
     doc.removeEventListener('focusin', focusChanged)
     doc.removeEventListener('focusout', schedule)
+    doc.removeEventListener('keydown', activeWindowKey, true)
     doc.removeEventListener('input', inputChanged)
     for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel']) doc.removeEventListener(type, userActivity, true)
     for (const type of ['compositionstart', 'compositionend']) doc.removeEventListener(type, compositionChanged)

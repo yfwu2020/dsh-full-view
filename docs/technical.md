@@ -30,7 +30,7 @@ macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inli
 
 完整视图仅以 CSS 隐藏官方 overlay 内 `.dsh-sel-layer .dsh-sel-pill`（胶囊及其球形态），使用 `!important` 覆盖解读插件动态设置的内联 display，不改写节点或持久状态。划词 / 引用 `.dsh-sel-btn` 和 `.dsh-sel-panel` 保持显示。外部点击收起聊天的捕获阶段显式排除这些入口和面板后代：入口点击发生时解读 dialog 尚未显示，不能仅依赖 `popupOpen()`。解读面板内 iframe 导致的 window blur 同样排除；普通工作区点击仍遵循原收起规则。退出 / 卸载通过清理自有标记或样式恢复胶囊，这部分浮层及鼠标交互无需修改解读插件。
 
-Esc 共存逻辑需要两端配合：解读在 document 捕获阶段检测完整视图及展开聊天的事件归属，将展开聊天内的 Esc 留给聊天；焦点在两窗外（或聊天已收成紧凑条）时优先退解读，每次 preventDefault / stopPropagation 只退一层。解读外的宿主 menu / listbox / trigger-menu 目标仍留给原菜单。聊天在冒泡阶段检查 defaultPrevented、输入法、审批和 popupOpen：焦点在聊天内时忽略解读 panel / historyList 的弹窗；焦点在外面时保留弹窗保护，解读已经隐藏后允许收起聊天。因此关闭解读导致焦点落到 body，或聊天收起后焦点留在紧凑编辑器，都不会卡住下一次 Esc。两端不修改另一个插件的监听或节点，不强制迁移焦点；普通分栏保留解读原来的全局 Esc。
+Esc 共存通过完整视图自有 frame 上的 `data-dsh-active-floating-window` 协作，值为 chat / explanation / none。完整视图捕获 pointerdown，记录最后点击的窗口；focusin 与非 Esc 键盘操作支持 Tab 和继续输入，标题、消息、空白及解读同级 historyList 都属于窗口。点击两窗外或聚焦外部 iframe 清为 none；宿主 portal 菜单保留打开它的窗口。Esc 本身不更新活动归属，不用事件目标反推用户最后点击。聊天收起 / 隐藏、换会话清为 none，程序归还编辑焦点不重新激活；退出 / 卸载删除标记和监听。解读在捕获阶段读取活动标记，活动聊天仍展开时将 Esc 留给聊天，否则退出自己的一层并阻止同一次事件继续传播。聊天在冒泡阶段依照活动标记决定是否忽略解读弹窗，保留其他菜单、输入法和审批保护。两端不移动对方节点或拦改对方监听，普通分栏保留解读原全局 Esc；未升级的完整视图没有活动标记时解读兼容旧键盘焦点判断。
 
 标题栏增加 `[data-dsh-pin-chat]` 图钉 toggle，统一使用 26px 点击区域和 15px 图标，`aria-pressed` 表达固定状态；选中后使用主题色及淡色背景，不加悬停 title。默认不固定，只阻止 expanded 的 outsidePointer 和外部 iframe windowBlur 自动收起，不阻止网页获得焦点、不拦截网页事件。显式「−」、外缘、Esc、返回分栏保持原行为；手动隐藏再恢复保留本会话固定，退出 / 卸载或切换会话清除固定，不持久化到部署配置。
 

@@ -141,7 +141,7 @@ test('共存小窗的 Esc 跟随焦点，聊天收起保留解读及其菜单，
   try {
     f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
     const draft = f.document.getElementById('draft'), saved = draft.textContent
-    draft.focus(); esc(draft, { isComposing: true })
+    draft.focus(); draft.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true })); esc(draft, { isComposing: true })
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
     const menu = f.document.createElement('div'); menu.setAttribute('role', 'listbox'); f.chat.append(menu)
     esc(draft)
@@ -166,6 +166,46 @@ test('共存小窗的 Esc 跟随焦点，聊天收起保留解读及其菜单，
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '一次只退一个小窗')
     esc(f.document.body)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '下一次 Esc 再退聊天')
+  } finally { f.document.removeEventListener('keydown', explanationEscape, true); dispose(); f.dom.window.close() }
+})
+
+test('活动小窗由最后点击决定，消息空白不抢键盘焦点也能先退出，外部点击清除活动归属', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  const overlay = f.document.querySelector('[data-shell-overlay]')
+  overlay.innerHTML = '<div class="dsh-sel-layer"><div class="dsh-sel-panel" role="dialog" style="display:flex"><input><p>解读内容</p></div><div class="dsh-sel-history">历史内容</div></div>'
+  const panel = overlay.querySelector('.dsh-sel-panel'), input = panel.querySelector('input')
+  const owner = () => f.frame.getAttribute('data-dsh-active-floating-window')
+  const down = node => node.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+  const esc = node => node.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  const explanationEscape = event => {
+    if (event.key !== 'Escape' || panel.style.display === 'none') return
+    if (owner() === 'chat' && !f.chat.hasAttribute('data-dsh-chat-minimized')) return
+    event.preventDefault(); event.stopPropagation(); panel.style.display = 'none'
+  }
+  f.document.addEventListener('keydown', explanationEscape, true)
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
+    const draft = f.document.getElementById('draft')
+    input.focus(); down(f.chat.querySelector('#messages'))
+    assert.equal(f.document.activeElement, input, '点消息后键盘焦点仍在解读输入框')
+    assert.equal(owner(), 'chat', '点击聊天消息也激活聊天')
+    esc(input)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    assert.equal(panel.style.display, 'flex', '先收聊天，保留解读')
+    assert.equal(owner(), 'none', '收起及程序归还焦点不重新激活聊天')
+    esc(draft); assert.equal(panel.style.display, 'none', '连续下一次退解读')
+    panel.style.display = 'flex'; f.document.querySelector('[data-dsh-full-view-edge]').click()
+    draft.focus(); down(panel.querySelector('p'))
+    assert.equal(f.document.activeElement, draft)
+    assert.equal(owner(), 'explanation', '点击解读消息激活解读')
+    esc(draft); assert.equal(panel.style.display, 'none')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    panel.style.display = 'flex'; down(overlay.querySelector('.dsh-sel-history'))
+    assert.equal(owner(), 'explanation', '历史列表属于解读')
+    down(f.document.getElementById('sidebar')); assert.equal(owner(), 'none')
+    esc(draft); assert.equal(panel.style.display, 'none', '外部点击后忽略旧键盘焦点，先退解读')
+    esc(draft); assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    dispose(); assert.equal(f.frame.hasAttribute('data-dsh-active-floating-window'), false)
   } finally { f.document.removeEventListener('keydown', explanationEscape, true); dispose(); f.dom.window.close() }
 })
 
