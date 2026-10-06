@@ -54,6 +54,7 @@ export function installFullView(doc, input = {}, activity = null) {
   let composing = false
   let mode = 'expanded'
   let edge = null
+  let compactRecycle = null
   let composer = null
   let composerMarks = []
   let modelTrigger = null
@@ -184,6 +185,7 @@ export function installFullView(doc, input = {}, activity = null) {
       handle.setAttribute('aria-valuetext', `${Math.round(g.width)} × ${Math.round(g.height)} 像素`)
     }
     minimize.disabled = !!approvalState
+    compactRecycle.disabled = !!approvalState || !!activity?.getSnapshot().pending || composing
     minimize.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
     const label = minimized ? '展开聊天' : '收起聊天'
     if (edge.getAttribute('aria-expanded') !== String(!minimized)) edge.setAttribute('aria-expanded', String(!minimized))
@@ -370,6 +372,13 @@ export function installFullView(doc, input = {}, activity = null) {
       segment.setAttribute('aria-hidden', 'true')
       edge.append(segment)
     }
+    compactRecycle = button('收起为鲸鱼球', 'data-dsh-compact-recycle', null, event => {
+      event.stopPropagation()
+      if (mode !== 'compact' || approvalState || activity?.getSnapshot().pending || composing) return
+      clearEdgeClick()
+      setMode('hidden')
+    })
+    compactRecycle.removeAttribute('title')
     handles = ['se', 'w', 'e', 'n', 's', 'nw', 'ne', 'sw'].map(direction => {
       const handle = doc.createElement('div')
       handle.setAttribute('data-dsh-full-view-resize', '')
@@ -551,11 +560,11 @@ export function installFullView(doc, input = {}, activity = null) {
     }
     for (const key of ['x', 'y', 'width', 'height', 'collapsed-height']) surface.chat.style.removeProperty(`--dsh-fv-${key}`)
     header?.removeAttribute('data-dsh-floating-header')
-    const focusWasChrome = [badge, toolbar, ...handles].some(node => node?.contains(doc.activeElement))
-    toolbar?.remove(); edge?.remove(); badge?.remove(); processing?.remove()
+    const focusWasChrome = [badge, toolbar, compactRecycle, ...handles].some(node => node?.contains(doc.activeElement))
+    toolbar?.remove(); edge?.remove(); compactRecycle?.remove(); badge?.remove(); processing?.remove()
     for (const handle of handles) handle.remove()
     if (focusWasChrome) focusEditor()
-    toolbar = resize = edge = title = minimize = header = badge = processing = null
+    toolbar = resize = edge = compactRecycle = title = minimize = header = badge = processing = null
     handles = []
     surface = null
     mode = 'expanded'; minimized = false
@@ -603,6 +612,7 @@ export function installFullView(doc, input = {}, activity = null) {
     if (toolbar.parentElement !== surface.chat) surface.chat.prepend(toolbar)
     for (const handle of handles) if (handle.parentElement !== surface.chat) surface.chat.append(handle)
     if (edge.parentElement !== surface.chat) surface.chat.append(edge)
+    if (compactRecycle.parentElement !== surface.chat) surface.chat.append(compactRecycle)
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
     if (nextSession !== sessionId) {

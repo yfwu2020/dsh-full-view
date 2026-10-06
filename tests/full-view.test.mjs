@@ -826,6 +826,54 @@ test('隐藏鲸鱼球区分问题和计划确认，恢复时聚焦原待办输�
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('紧凑条上边缘横条主动连续缩入鲸鱼球，关闭自动回收仍可用且保留草稿', async () => {
+  const f = composerFixture(); const step = motionClock(f); const dispose = install(f.document, { compactIdleSeconds: 0 })
+  const draft = f.document.getElementById('draft')
+  try {
+    f.enter(); await settle(); step(0)
+    const trigger = f.document.querySelector('[data-dsh-compact-recycle]')
+    assert.ok(trigger, '紧凑条需要独立的主动收起入口')
+    assert.equal(displayed(trigger, f.dom.window), true)
+    assert.equal(trigger.getAttribute('aria-label'), '收起为鲸鱼球')
+    assert.equal(trigger.hasAttribute('title'), false)
+    trigger.click(); step(0)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '不先展开或改变紧凑形态')
+    assert.ok(f.document.querySelector('[data-dsh-whale-morph-shell]'))
+    step(460)
+    const badge = f.document.querySelector('[data-dsh-restore-chat]')
+    assert.equal(badge.hidden, false)
+    badge.click(); step(500); step(960)
+    assert.equal(displayed(trigger, f.dom.window), false, '展开时继续使用标题栏减号')
+    assert.equal(f.document.getElementById('draft'), draft)
+    assert.equal(draft.textContent, '正在编辑的草稿')
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    assert.equal(displayed(trigger, f.dom.window), true)
+    f.exit(); await settle(); step(1000)
+    assert.equal(f.document.querySelector('[data-dsh-compact-recycle]'), null)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('上边缘横条在待回应或输入法组词时不能隐藏会话', async () => {
+  const f = composerFixture(), activity = activityFixture(), dispose = install(f.document, {}, activity)
+  try {
+    f.enter(); await settle()
+    const trigger = f.document.querySelector('[data-dsh-compact-recycle]')
+    assert.ok(trigger)
+    activity.update({ running: true, pending: true, pendingKind: 'question' }); await settle()
+    assert.equal(trigger.disabled, true)
+    trigger.click(); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    activity.update({ pending: false }); await settle()
+    assert.equal(trigger.disabled, false)
+    const draft = f.document.getElementById('draft')
+    draft.dispatchEvent(new f.dom.window.CompositionEvent('compositionstart', { bubbles: true })); await settle()
+    assert.equal(trigger.disabled, true)
+    trigger.click(); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    draft.dispatchEvent(new f.dom.window.CompositionEvent('compositionend', { bubbles: true })); await settle()
+    assert.equal(trigger.disabled, false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 function motionClock(f, reduced = false) {
   let next = 0
   const callbacks = new Map()

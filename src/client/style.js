@@ -22,7 +22,7 @@ export const style = `
   transition: top 280ms cubic-bezier(.22, 1, .36, 1), height 280ms cubic-bezier(.22, 1, .36, 1), border-radius 240ms ease;
   transform-origin: bottom right;
 }
-[data-dsh-floating-chat] > :not([data-dsh-full-view-toolbar]):not([data-dsh-full-view-resize]):not([data-dsh-full-view-edge]) {
+[data-dsh-floating-chat] > :not([data-dsh-full-view-toolbar]):not([data-dsh-full-view-resize]):not([data-dsh-full-view-edge]):not([data-dsh-compact-recycle]) {
   flex: 1 1 0; min-height: 0; max-height: 100%; overflow: hidden;
 }
 [data-dsh-floating-chat] [data-slot="main"],
@@ -81,6 +81,19 @@ export const style = `
 [data-dsh-edge-side="left"] { left: 0; top: 14px; bottom: 14px; width: 6px; }
 [data-dsh-edge-side="right"] { right: 0; top: 14px; bottom: 20px; width: 6px; }
 [data-dsh-chat-minimized] [data-dsh-full-view-edge] { display: block !important; }
+[data-dsh-compact-recycle] {
+  position: absolute; z-index: 5; left: 50%; top: -9px; transform: translateX(-50%);
+  box-sizing: border-box; width: 48px; height: 18px; flex: none; display: none; align-items: center; justify-content: center;
+  padding: 0; border: 0; background: transparent; border-radius: 6px; cursor: pointer; touch-action: manipulation; -webkit-app-region: no-drag;
+}
+[data-dsh-floating-chat][data-dsh-chat-composer][data-dsh-chat-minimized] > [data-dsh-compact-recycle] { display: flex; }
+[data-dsh-compact-recycle]::before {
+  content: ''; width: 28px; height: 3px; border-radius: 2px; background: var(--dsw-alias-label-tertiary, #8b909a);
+  transition: width 150ms ease, background 150ms ease;
+}
+[data-dsh-compact-recycle]:hover:not(:disabled)::before { width: 34px; background: var(--dsw-alias-label-primary, #202124); }
+[data-dsh-compact-recycle]:disabled { cursor: default; opacity: .4; }
+[data-dsh-compact-recycle]:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, #5686fe); outline-offset: -2px; }
 [data-dsh-floating-chat] [data-composer-seat] { padding: 3px; box-sizing: border-box; }
 [data-dsh-floating-chat] [data-dsh-full-view-input-shell] { padding: 0 !important; gap: 0 !important; margin: 0 !important; }
 [data-dsh-floating-chat] [data-dsh-full-view-composer-card] {
