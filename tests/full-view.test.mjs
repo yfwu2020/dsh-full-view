@@ -126,12 +126,12 @@ test('打开解读及操作解读内容保持聊天展开，普通工作区点�
   } finally { dispose(); f.dom.window.close() }
 })
 
-test('macOS 完整视图标签栏释放宿主窗口控件留白，分栏和浮动面板保持原间距', async () => {
+test('macOS 完整视图标签栏按侧栏状态避让窗口按钮，原生全屏及分栏保持宿主间距', async () => {
   const f = composerFixture()
   f.document.documentElement.setAttribute('data-platform', 'darwin')
   f.panel.classList.add('host-panel')
   const host = f.document.createElement('style')
-  host.textContent = '[data-platform="darwin"] .host-panel[data-sidebar-right-panel="fullscreen"] [data-dockkit-host="dock"][data-dockkit-column="0"] { --dsh-dockkit-strip-inline-start: 88px; } .host-panel [data-dockkit-host] { --dsh-dockkit-strip-inline-start: 22px; }'
+  host.textContent = '[data-platform="darwin"] .host-panel[data-sidebar-right-panel="fullscreen"] [data-dockkit-host="dock"][data-dockkit-column="0"] { --dsh-dockkit-strip-inline-start: 88px; } [data-platform="darwin"][data-fullscreen] .host-panel[data-sidebar-right-panel="fullscreen"] [data-dockkit-host="dock"][data-dockkit-column="0"] { --dsh-dockkit-strip-inline-start: 10px; } .host-panel [data-dockkit-host] { --dsh-dockkit-strip-inline-start: 22px; }'
   const dock = f.document.createElement('div'); dock.setAttribute('data-dockkit-host', 'dock'); dock.setAttribute('data-dockkit-column', '0')
   const floating = dock.cloneNode(); floating.setAttribute('data-dockkit-host', 'float')
   f.panel.append(dock, floating)
@@ -142,6 +142,16 @@ test('macOS 完整视图标签栏释放宿主窗口控件留白，分栏和浮�
     f.enter(); await settle()
     assert.equal(leading(dock), '10px', '面板已经避开侧栏，不再留 macOS 窗口控件空白')
     assert.equal(leading(floating), '22px')
+    f.frame.setAttribute('data-sidebar-collapsed', ''); await settle()
+    assert.equal(leading(dock), '88px', '侧栏收起后恢复宿主窗口按钮避让，不能让标签挤进红黄绿区域')
+    assert.equal(leading(floating), '22px')
+    f.document.documentElement.setAttribute('data-fullscreen', ''); await settle()
+    assert.equal(leading(dock), '10px', '系统原生全屏不需要窗口按钮留白，继续服从宿主规则')
+    f.document.documentElement.removeAttribute('data-fullscreen'); await settle()
+    assert.equal(leading(dock), '88px')
+    f.frame.removeAttribute('data-sidebar-collapsed'); await settle()
+    assert.equal(leading(dock), '10px', '重新展开侧栏立即去掉冗余空白')
+    f.frame.setAttribute('data-sidebar-collapsed', ''); await settle()
     f.exit(); await settle()
     assert.equal(leading(dock), '22px')
     f.enter(); await settle(); dispose()

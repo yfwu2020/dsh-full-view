@@ -20,7 +20,7 @@
 
 宿主加载 `lib/index.js`，客户端通过 `window.__ModuleLoader__` 加载 `lib/client.js`。客户端依赖 `layout`、`sidebarRight`、`sessions` 和 `uiSession` 服务。
 
-macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inline-start: 88px`。插件面板已位于侧栏之后的工作区，首列 DockKit 留白用 `10px !important` 覆盖宿主更高优先级规则；只在插件完整视图标记和全屏首列 dock 同时存在时生效，浮动面板、其他列和普通分栏保留宿主规则。
+macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inline-start: 88px`，系统原生全屏改为 10px。仅在 frame 带插件完整视图标记、没有 `[data-sidebar-collapsed]` 且目标为全屏首列 dock 时，以 `10px !important` 去掉侧栏已避让后的冗余留白。侧栏收起时退出这条覆盖，直接服从宿主的 88px / 系统全屏 10px 规则，不复制窗口按钮坐标或改写宿主属性。浮动面板、其他列和普通分栏保留宿主规则。
 
 适配器通过 `data-rightbar-col`、`data-rightbar-fullscreen`、`data-sidebar-right-panel` 等语义标记找到原聊天容器，并检查会话身份匹配。它改变原聊天容器的定位，不重建会话、编辑器或 iframe。返回分栏使用面板自身的按钮。
 
