@@ -361,7 +361,10 @@ export function installFullView(doc, input = {}, activity = null) {
     toolbar.setAttribute('data-dsh-full-view-toolbar', '')
     toolbar.setAttribute('role', 'toolbar')
     toolbar.setAttribute('aria-label', '聊天小窗')
-    title = button('移动聊天小窗', 'data-dsh-full-view-title', null, () => {})
+    title = doc.createElement('div')
+    title.setAttribute('data-dsh-full-view-title', '')
+    title.setAttribute('role', 'group')
+    title.tabIndex = 0
     title.addEventListener('keydown', moveWithKeyboard)
     title.textContent = '聊天'
     minimize = button('隐藏聊天，保留恢复入口', 'data-dsh-minimize-chat', 'M5 12h14', () => setMode('hidden'))
@@ -370,10 +373,7 @@ export function installFullView(doc, input = {}, activity = null) {
       updateGeometry()
     })
     pin.removeAttribute('title')
-    const grip = button('移动聊天小窗：方向键移动，Shift 加大步长', 'data-dsh-move-chat', null, () => {})
-    grip.textContent = '⠿'
-    grip.addEventListener('keydown', moveWithKeyboard)
-    toolbar.append(minimize, title, pin, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
+    toolbar.append(minimize, title, pin, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit))
     edge = button('展开聊天', 'data-dsh-full-view-edge', null, event => {
       if (suppressEdgeClick && event.detail !== 0) { suppressEdgeClick = false; return }
       toggleMinimize()
@@ -441,7 +441,7 @@ export function installFullView(doc, input = {}, activity = null) {
     // Do not announce each second to assistive technology.
     processing.setAttribute('aria-live', 'off')
     processing.hidden = true
-    for (const element of [toolbar, title, edge, ...handles, badge, grip]) {
+    for (const element of [toolbar, edge, ...handles, badge]) {
       element.addEventListener('pointerdown', pointerDown)
       element.addEventListener('pointermove', pointerMove)
       element.addEventListener('pointerup', pointerEnd)

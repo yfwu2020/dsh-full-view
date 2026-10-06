@@ -32,6 +32,8 @@ macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inli
 
 标题栏增加 `[data-dsh-pin-chat]` 图钉 toggle，统一使用 26px 点击区域和 15px 图标，`aria-pressed` 表达固定状态；选中后使用主题色及淡色背景，不加悬停 title。默认不固定，只阻止 expanded 的 outsidePointer 和外部 iframe windowBlur 自动收起，不阻止网页获得焦点、不拦截网页事件。显式「−」、外缘、Esc、返回分栏保持原行为；手动隐藏再恢复保留本会话固定，退出 / 卸载或切换会话清除固定，不持久化到部署配置。
 
+标题采用可键盘聚焦的普通 div（role=group），保留方向键移动和无悬停 title；移除专用拖拽手柄。标题栏统一接收非 button 区域冒泡的 pointer 事件并捕获到 toolbar，标题文字后代、留白及间距均使用同一拖动路径。操作按钮及其 SVG 后代不启动拖动；标题不再匹配 button:hover，背景透明、box-shadow 为 none，标题栏也不添加阴影。保留键盘 focus-visible 轮廓及整个小窗原有阴影。
+
 卸载和热重载会清理插件的工具栏、样式、几何标记、事件与观察器，保留宿主原有内容及布局状态。
 
 ## 紧凑输入条（0.1.4）

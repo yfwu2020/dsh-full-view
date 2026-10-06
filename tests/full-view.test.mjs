@@ -728,7 +728,7 @@ test('左缘键盘缩放保持右端位置，窄视口约束不会改变另一�
   try {
     f.enter(); await settle()
     const left = f.document.querySelector('[data-dsh-resize-direction="w"]')
-    f.document.querySelector('[data-dsh-move-chat]').dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
+    f.document.querySelector('[data-dsh-full-view-title]').dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
     const read = key => parseFloat(f.chat.style.getPropertyValue('--dsh-fv-' + key))
     const right = read('x') + read('width')
     left.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
@@ -863,6 +863,32 @@ test('菜单、拖动、中文组合输入和待办暂停回收，退出与卸�
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('标题栏去掉专用拖拽按钮，所有非按钮区域及标题后代都能拖动，操作按钮不开始拖动', async () => {
+  const f = composerFixture(), dispose = install(f.document)
+  try {
+    f.enter(); await settle(); f.document.getElementById('draft').focus()
+    const toolbar = f.document.querySelector('[data-dsh-full-view-toolbar]'), title = f.document.querySelector('[data-dsh-full-view-title]')
+    capture(toolbar)
+    assert.equal(f.document.querySelector('[data-dsh-move-chat]'), null)
+    assert.equal(title.tagName, 'DIV', '标题是拖动区域，不再具有按钮外观')
+    assert.equal(title.hasAttribute('title'), false)
+    assert.equal(toolbar.querySelectorAll('button').length, 3)
+    const caption = f.document.createElement('span'); caption.textContent = '标题文字'; title.append(caption)
+    const space = f.document.createElement('span'); toolbar.append(space)
+    for (const target of [toolbar, space, caption]) {
+      const before = parseFloat(f.chat.style.getPropertyValue('--dsh-fv-x'))
+      pointer(f, target, 'pointerdown', 900, 260); pointer(f, target, 'pointermove', 860, 260); pointer(f, target, 'pointerup', 860, 260)
+      assert.equal(parseFloat(f.chat.style.getPropertyValue('--dsh-fv-x')), before - 40)
+      assert.equal(f.frame.hasAttribute('data-dsh-fv-dragging'), false)
+    }
+    for (const button of toolbar.querySelectorAll('button')) {
+      pointer(f, button.querySelector('svg') ?? button, 'pointerdown', 900, 260)
+      assert.equal(f.frame.hasAttribute('data-dsh-fv-dragging'), false, '图标后代点击也不被标题栏捕获为拖动')
+    }
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('完整小窗的标题和空白只拖动，单击不切换；标题方向键也可移动', async () => {
   const f = composerFixture(), dispose = install(f.document)
   try {
@@ -873,7 +899,7 @@ test('完整小窗的标题和空白只拖动，单击不切换；标题方向�
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
     assert.equal(title.hasAttribute('aria-expanded'), false)
     assert.match(title.getAttribute('aria-label'), /移动聊天小窗/)
-    capture(title)
+    capture(toolbar)
     const before = parseFloat(f.chat.style.getPropertyValue('--dsh-fv-x'))
     pointer(f, title, 'pointerdown', 900, 260); pointer(f, title, 'pointermove', 800, 280); pointer(f, title, 'pointerup', 800, 280)
     title.dispatchEvent(new f.dom.window.MouseEvent('click', { bubbles: true, detail: 1 }))
