@@ -8,7 +8,8 @@ export const style = `
   --dsh-sidebar-width: var(--dsh-fv-content-width) !important;
 }
 [data-dsh-full-view] [data-sidebar-right-panel="fullscreen"] [data-dockkit-host="dock"][data-dockkit-column="0"] {
-  --dsh-dockkit-strip-inline-start: 10px;
+  /* This pane starts beside the sidebar; override the host's more specific macOS traffic-light clearance. */
+  --dsh-dockkit-strip-inline-start: 10px !important;
 }
 [data-dsh-floating-chat] {
   position: absolute !important; left: var(--dsh-fv-x) !important; top: var(--dsh-fv-y) !important;

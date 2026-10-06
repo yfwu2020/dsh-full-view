@@ -53,6 +53,29 @@ function displayed(element, win) {
   return true
 }
 
+test('macOS 完整视图标签栏释放宿主窗口控件留白，分栏和浮动面板保持原间距', async () => {
+  const f = composerFixture()
+  f.document.documentElement.setAttribute('data-platform', 'darwin')
+  f.panel.classList.add('host-panel')
+  const host = f.document.createElement('style')
+  host.textContent = '[data-platform="darwin"] .host-panel[data-sidebar-right-panel="fullscreen"] [data-dockkit-host="dock"][data-dockkit-column="0"] { --dsh-dockkit-strip-inline-start: 88px; } .host-panel [data-dockkit-host] { --dsh-dockkit-strip-inline-start: 22px; }'
+  const dock = f.document.createElement('div'); dock.setAttribute('data-dockkit-host', 'dock'); dock.setAttribute('data-dockkit-column', '0')
+  const floating = dock.cloneNode(); floating.setAttribute('data-dockkit-host', 'float')
+  f.panel.append(dock, floating)
+  const dispose = install(f.document)
+  f.document.head.append(host) // A host sheet loaded after the plugin must not reinstate the clearance.
+  const leading = node => f.dom.window.getComputedStyle(node).getPropertyValue('--dsh-dockkit-strip-inline-start').trim()
+  try {
+    f.enter(); await settle()
+    assert.equal(leading(dock), '10px', '面板已经避开侧栏，不再留 macOS 窗口控件空白')
+    assert.equal(leading(floating), '22px')
+    f.exit(); await settle()
+    assert.equal(leading(dock), '22px')
+    f.enter(); await settle(); dispose()
+    assert.equal(leading(dock), '88px', '卸载后恢复宿主原始全屏间距')
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('收起成输入条后仍能输入和发送，点击外缘切换聊天并保留原节点', async () => {
   const f = composerFixture()
   const draft = f.document.getElementById('draft')
