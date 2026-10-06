@@ -124,6 +124,9 @@ export function installFullView(doc, input = {}, activity = null) {
     } finally { returningFocus = false }
   }
   const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
+  // The selection button opens its dialog after our capture-phase pointer handler.
+  // Treat its own controls as a companion window even before the dialog is visible.
+  const withinExplanation = node => node instanceof win.Element && Boolean(node.closest('.dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel'))
   const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
   const popupOpen = () => [...doc.querySelectorAll(popupSelector)].some(node => {
     if (node.matches(pendingSelector) && surface?.chat.contains(node) && !belongsToConversation(node)) return false
@@ -637,7 +640,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const outsidePointer = event => {
     if (!surface || drag) return
     if (mode === 'compact' && editor()?.contains(event.target)) { setMode('expanded'); return }
-    if (mode !== 'expanded' || approvalState || withinChat(event.target) || popupOpen()) return
+    if (mode !== 'expanded' || approvalState || withinChat(event.target) || withinExplanation(event.target) || popupOpen()) return
     setMode('compact')
   }
   const focusChanged = event => {
@@ -655,7 +658,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const windowBlur = () => {
     if (drag) finishPointer(null, true)
     // Iframe clicks do not bubble into the parent document.
-    if (surface && mode === 'expanded' && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !popupOpen()) setMode('compact')
+    if (surface && mode === 'expanded' && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !withinExplanation(doc.activeElement) && !popupOpen()) setMode('compact')
   }
   const observer = new win.MutationObserver(records => {
     if (records.some(record => {

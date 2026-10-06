@@ -78,6 +78,54 @@ test('完整视图的共享浮层高于工作面板和聊天小窗，退出恢�
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('完整视图隐藏解读胶囊及球，保留划词入口和面板，退出及卸载恢复', async () => {
+  const f = composerFixture()
+  const overlay = f.document.querySelector('[data-shell-overlay]')
+  overlay.innerHTML = '<div class="dsh-sel-layer"><div class="dsh-sel-pill" style="display:flex">解读胶囊</div><button class="dsh-sel-btn">解读</button><div class="dsh-sel-panel" role="dialog" style="display:flex">正文</div></div><button id="other-plugin">其他插件</button>'
+  const pill = overlay.querySelector('.dsh-sel-pill')
+  const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    assert.equal(displayed(pill, f.dom.window), false)
+    pill.setAttribute('data-ball', '1'); await settle()
+    assert.equal(displayed(pill, f.dom.window), false, '同一胶囊收成球后也隐藏')
+    for (const selector of ['.dsh-sel-btn', '.dsh-sel-panel', '#other-plugin']) assert.equal(displayed(overlay.querySelector(selector), f.dom.window), true)
+    assert.equal(pill.style.display, 'flex', '不改写另一个插件的内联状态')
+    f.exit(); await settle()
+    assert.equal(displayed(pill, f.dom.window), true)
+    f.enter(); await settle(); dispose()
+    assert.equal(displayed(pill, f.dom.window), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('打开解读及操作解读内容保持聊天展开，普通工作区点击仍能收起', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  const overlay = f.document.querySelector('[data-shell-overlay]')
+  overlay.innerHTML = '<div class="dsh-sel-layer"><button class="dsh-sel-btn"><span>解读</span></button><div class="dsh-sel-panel" role="dialog" style="display:none"><p>解读正文</p><input><iframe></iframe><button>关闭</button></div></div>'
+  const opener = overlay.querySelector('.dsh-sel-btn'), panel = overlay.querySelector('.dsh-sel-panel')
+  const down = node => node.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+  opener.addEventListener('click', () => { panel.style.display = 'flex'; panel.querySelector('input').focus() })
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
+    const draft = f.document.getElementById('draft'), originalText = draft.textContent
+    down(opener.firstElementChild)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '捕获阶段不能在解读窗口出现前收起聊天')
+    opener.click(); await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    for (const node of [panel.querySelector('p'), panel.querySelector('input')]) {
+      down(node); node.focus(); await settle()
+      assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    }
+    panel.querySelector('iframe').focus(); f.dom.window.dispatchEvent(new f.dom.window.Event('blur'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(draft.textContent, originalText)
+    down(panel.querySelector('button')); panel.style.display = 'none'; await settle()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '关闭解读不联动收起聊天')
+    down(f.document.getElementById('sidebar'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('macOS 完整视图标签栏释放宿主窗口控件留白，分栏和浮动面板保持原间距', async () => {
   const f = composerFixture()
   f.document.documentElement.setAttribute('data-platform', 'darwin')

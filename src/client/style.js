@@ -5,6 +5,9 @@ export const style = `
 /* Keep official shell.overlay entries above fullscreen dock (40), chat (50), and DockKit floats (60).
    Raising a plugin's child z-index cannot escape the host overlay's original stacking context (20). */
 [data-dsh-full-view] > [data-shell-overlay] { z-index: 70; }
+/* Hide only the persistent explanation capsule (including its collapsed ball).
+   Selection/quote buttons and the explanation dialog stay available. */
+[data-dsh-full-view] > [data-shell-overlay] .dsh-sel-layer .dsh-sel-pill { display: none !important; }
 [data-dsh-full-view] [data-sidebar-right-panel="fullscreen"][data-sidebar-right-open] {
   width: var(--dsh-fv-content-width) !important;
   max-width: var(--dsh-fv-content-width) !important;
