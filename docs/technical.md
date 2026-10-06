@@ -30,6 +30,8 @@ macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inli
 
 完整视图仅以 CSS 隐藏官方 overlay 内 `.dsh-sel-layer .dsh-sel-pill`（胶囊及其球形态），使用 `!important` 覆盖解读插件动态设置的内联 display，不改写节点或持久状态。划词 / 引用 `.dsh-sel-btn` 和 `.dsh-sel-panel` 保持显示。外部点击收起聊天的捕获阶段显式排除这些入口和面板后代：入口点击发生时解读 dialog 尚未显示，不能仅依赖 `popupOpen()`。解读面板内 iframe 导致的 window blur 同样排除；普通工作区点击仍遵循原收起规则。退出 / 卸载通过清理自有标记或样式恢复胶囊，解读插件本身无需修改。
 
+标题栏增加 `[data-dsh-pin-chat]` 图钉 toggle，统一使用 26px 点击区域和 15px 图标，`aria-pressed` 表达固定状态；选中后使用主题色及淡色背景，不加悬停 title。默认不固定，只阻止 expanded 的 outsidePointer 和外部 iframe windowBlur 自动收起，不阻止网页获得焦点、不拦截网页事件。显式「−」、外缘、Esc、返回分栏保持原行为；手动隐藏再恢复保留本会话固定，退出 / 卸载或切换会话清除固定，不持久化到部署配置。
+
 卸载和热重载会清理插件的工具栏、样式、几何标记、事件与观察器，保留宿主原有内容及布局状态。
 
 ## 紧凑输入条（0.1.4）

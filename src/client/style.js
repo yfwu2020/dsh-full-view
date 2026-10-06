@@ -63,6 +63,9 @@ export const style = `
   background: transparent; border: 0; border-radius: 6px; cursor: pointer; color: var(--dsw-alias-label-secondary, #666);
 }
 [data-dsh-full-view-toolbar] button:hover { background: var(--dsw-alias-interactive-bg-hover, #0001); }
+[data-dsh-full-view-toolbar] [data-dsh-pin-chat][aria-pressed="true"] {
+  color: var(--dsw-alias-brand-primary, #3970e8); background: color-mix(in srgb, currentColor 14%, transparent);
+}
 [data-dsh-full-view-toolbar] button:focus-visible { outline: 2px solid var(--dsw-focus-ring-color, #5686fe); outline-offset: -2px; }
 [data-dsh-full-view-toolbar] svg { width: 15px; height: 15px; }
 [data-dsh-floating-chat][data-dsh-chat-minimized] { height: 36px !important; }

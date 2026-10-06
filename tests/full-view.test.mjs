@@ -398,6 +398,66 @@ test('输入焦点直接展开完整聊天，隐藏恢复同样展开并保留�
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('图钉固定展开后外部点击和网页 iframe 不收起，解除后恢复原交互', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  const down = node => node.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+  try {
+    f.enter(); await settle()
+    const pin = f.document.querySelector('[data-dsh-pin-chat]')
+    assert.ok(pin)
+    assert.equal(displayed(pin, f.dom.window), false, '紧凑条不增加额外按钮')
+    f.document.getElementById('draft').focus()
+    assert.equal(displayed(pin, f.dom.window), true)
+    assert.equal(pin.getAttribute('aria-pressed'), 'false')
+    assert.equal(pin.hasAttribute('title'), false)
+    pin.click()
+    assert.equal(pin.getAttribute('aria-pressed'), 'true')
+    for (const node of [f.document.getElementById('sidebar'), f.panel]) {
+      down(node)
+      assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    }
+    const iframe = f.document.getElementById('preview')
+    iframe.focus(); f.dom.window.dispatchEvent(new f.dom.window.Event('blur'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    assert.equal(f.document.activeElement, iframe, '固定不能抢回网页焦点')
+    assert.equal(f.document.getElementById('draft').textContent, '正在编辑的草稿')
+    pin.click()
+    assert.equal(pin.getAttribute('aria-pressed'), 'false')
+    down(f.document.getElementById('sidebar'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+    f.document.getElementById('draft').focus()
+    iframe.focus(); f.dom.window.dispatchEvent(new f.dom.window.Event('blur'))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('固定仍允许手动隐藏与恢复、Esc 和返回分栏，退出及换会话清除固定', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  const pin = () => f.document.querySelector('[data-dsh-pin-chat]')
+  try {
+    f.enter(); await settle(); f.document.getElementById('draft').focus()
+    assert.ok(pin()); pin().click()
+    f.document.querySelector('[data-dsh-minimize-chat]').click()
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
+    f.document.querySelector('[data-dsh-restore-chat]').click()
+    assert.equal(pin().getAttribute('aria-pressed'), 'true')
+    f.document.getElementById('draft').dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '显式收起仍有效')
+    f.document.getElementById('draft').focus()
+    f.document.querySelector('[data-dsh-return-split]').click(); await settle()
+    assert.equal(pin(), null)
+    f.enter(); await settle(); f.document.getElementById('draft').focus()
+    assert.equal(pin().getAttribute('aria-pressed'), 'false')
+    pin().click()
+    f.chat.querySelector('[data-conversation-session]').setAttribute('data-conversation-session', 's2')
+    f.panel.closest('[data-sidebar-right-session]').setAttribute('data-sidebar-right-session', 's2')
+    await settle()
+    assert.equal(pin().getAttribute('aria-pressed'), 'false', '不把上一会话的固定传给新会话')
+    dispose()
+    assert.equal(pin(), null)
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('外部点击与 Esc 收起，原生弹出菜单和输入法组合键不干扰', async () => {
   const f = composerFixture(); const dispose = install(f.document)
   const down = node => node.dispatchEvent(new f.dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }))

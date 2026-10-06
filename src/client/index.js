@@ -64,6 +64,8 @@ export function installFullView(doc, input = {}, activity = null) {
   let suppressEdgeClick = false
   let title = null
   let minimize = null
+  let pin = null
+  let pinned = false
   let header = null
   let raf = null
   let disposed = false
@@ -188,6 +190,8 @@ export function installFullView(doc, input = {}, activity = null) {
       handle.setAttribute('aria-valuetext', `${Math.round(g.width)} × ${Math.round(g.height)} 像素`)
     }
     minimize.disabled = !!approvalState
+    pin.setAttribute('aria-pressed', String(pinned))
+    pin.setAttribute('aria-label', pinned ? '取消固定聊天小窗' : '固定聊天小窗')
     compactRecycle.disabled = !!approvalState || !!activity?.getSnapshot().pending || composing
     minimize.title = approvalState ? '请先处理会话中的待办提示' : '隐藏聊天，保留恢复入口'
     const label = minimized ? '展开聊天' : '收起聊天'
@@ -337,7 +341,7 @@ export function installFullView(doc, input = {}, activity = null) {
     element.setAttribute('aria-label', label)
     element.title = label
     element.setAttribute(marker, '')
-    // Reuse the plugin's existing glyphs; new actions use plain text labels.
+    // Action glyphs share one stroke style; labels remain available to assistive tools.
     if (path) element.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="${path}"/></svg>`
     element.addEventListener('click', handler)
     return element
@@ -361,10 +365,15 @@ export function installFullView(doc, input = {}, activity = null) {
     title.addEventListener('keydown', moveWithKeyboard)
     title.textContent = '聊天'
     minimize = button('隐藏聊天，保留恢复入口', 'data-dsh-minimize-chat', 'M5 12h14', () => setMode('hidden'))
+    pin = button('固定聊天小窗', 'data-dsh-pin-chat', 'M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6Z M12 14v7', () => {
+      pinned = !pinned
+      updateGeometry()
+    })
+    pin.removeAttribute('title')
     const grip = button('移动聊天小窗：方向键移动，Shift 加大步长', 'data-dsh-move-chat', null, () => {})
     grip.textContent = '⠿'
     grip.addEventListener('keydown', moveWithKeyboard)
-    toolbar.append(minimize, title, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
+    toolbar.append(minimize, title, pin, button('返回分栏视图', 'data-dsh-return-split', 'M4 5h16v14H4z M10 5v14', returnSplit), grip)
     edge = button('展开聊天', 'data-dsh-full-view-edge', null, event => {
       if (suppressEdgeClick && event.detail !== 0) { suppressEdgeClick = false; return }
       toggleMinimize()
@@ -567,10 +576,10 @@ export function installFullView(doc, input = {}, activity = null) {
     toolbar?.remove(); edge?.remove(); compactRecycle?.remove(); badge?.remove(); processing?.remove()
     for (const handle of handles) handle.remove()
     if (focusWasChrome) focusEditor()
-    toolbar = resize = edge = compactRecycle = title = minimize = header = badge = processing = null
+    toolbar = resize = edge = compactRecycle = title = minimize = pin = header = badge = processing = null
     handles = []
     surface = null
-    mode = 'expanded'; minimized = false
+    mode = 'expanded'; minimized = false; pinned = false
     approvalState = savedAccessibility = sessionId = null
   }
   const syncApproval = () => {
@@ -619,7 +628,7 @@ export function installFullView(doc, input = {}, activity = null) {
     syncComposer()
     const nextSession = surface.chat.querySelector('[data-conversation-session]')?.getAttribute('data-conversation-session')
     if (nextSession !== sessionId) {
-      composing = false; sessionId = nextSession; approvalState = null
+      composing = false; pinned = false; sessionId = nextSession; approvalState = null
       activity?.setSession(sessionId)
       const state = activity?.getSnapshot()
       completionReminders.set(sessionId, { id: state?.completed ? state.completionId ?? 'completed' : null, unread: false })
@@ -640,7 +649,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const outsidePointer = event => {
     if (!surface || drag) return
     if (mode === 'compact' && editor()?.contains(event.target)) { setMode('expanded'); return }
-    if (mode !== 'expanded' || approvalState || withinChat(event.target) || withinExplanation(event.target) || popupOpen()) return
+    if (mode !== 'expanded' || pinned || approvalState || withinChat(event.target) || withinExplanation(event.target) || popupOpen()) return
     setMode('compact')
   }
   const focusChanged = event => {
@@ -658,7 +667,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const windowBlur = () => {
     if (drag) finishPointer(null, true)
     // Iframe clicks do not bubble into the parent document.
-    if (surface && mode === 'expanded' && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !withinExplanation(doc.activeElement) && !popupOpen()) setMode('compact')
+    if (surface && mode === 'expanded' && !pinned && doc.activeElement?.tagName === 'IFRAME' && !withinChat(doc.activeElement) && !withinExplanation(doc.activeElement) && !popupOpen()) setMode('compact')
   }
   const observer = new win.MutationObserver(records => {
     if (records.some(record => {
