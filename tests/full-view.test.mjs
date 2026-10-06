@@ -747,17 +747,18 @@ function virtualTimers(win) {
   }
 }
 
-test('紧凑条闲置 30 秒回收；用户操作重新计时，流式回复不延期且不抢工作区焦点', async () => {
+test('紧凑条闲置 90 秒回收；用户操作重新计时，流式回复不延期且不抢工作区焦点', async () => {
   const f = composerFixture(), timers = virtualTimers(f.dom.window), dispose = install(f.document)
   try {
     f.enter(); await settle()
-    timers.advance(29000)
+    timers.advance(89000)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false, '默认闲置未满 90 秒不能回收')
     f.document.getElementById('add').dispatchEvent(new f.dom.window.MouseEvent('pointermove', { bubbles: true }))
     timers.advance(20000)
     f.document.getElementById('messages').textContent += '，流式更新'
     await settle()
     const working = f.document.querySelector('[data-sidebar-right-mode]'); working.focus()
-    timers.advance(9999)
+    timers.advance(69999)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
     timers.advance(1)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
@@ -765,7 +766,7 @@ test('紧凑条闲置 30 秒回收；用户操作重新计时，流式回复不�
     assert.equal(f.document.getElementById('draft').textContent, '正在编辑的草稿')
     f.document.querySelector('[data-dsh-restore-chat]').click()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
-    timers.advance(60000)
+    timers.advance(180000)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false, '完整小窗不自动隐藏')
   } finally { dispose(); f.dom.window.close() }
 })
@@ -773,28 +774,28 @@ test('紧凑条闲置 30 秒回收；用户操作重新计时，流式回复不�
 test('菜单、拖动、中文组合输入和待办暂停回收，退出与卸载清理，配置可关闭回收', async () => {
   const f = composerFixture(), timers = virtualTimers(f.dom.window), dispose = install(f.document)
   try {
-    f.enter(); await settle(); timers.advance(29000)
+    f.enter(); await settle(); timers.advance(89000)
     const menu = f.document.createElement('div'); menu.setAttribute('role', 'listbox'); f.document.body.append(menu); await settle()
-    timers.advance(60000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    timers.advance(180000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
     menu.remove(); await settle()
     const approval = f.document.createElement('div'); approval.setAttribute('data-approval-key', 'idle-check')
     f.document.querySelector('[data-conversation-content]').append(approval); await settle()
-    timers.advance(60000)
+    timers.advance(180000)
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '待办展开完整小窗且不自动回收')
     approval.remove(); await settle()
     assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true)
     const edge = f.document.querySelector('[data-dsh-full-view-edge]'); capture(edge)
     pointer(f, edge, 'pointerdown', 900, 740)
-    timers.advance(60000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    timers.advance(180000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
     pointer(f, edge, 'pointerup', 900, 740)
     const draft = f.document.getElementById('draft')
     draft.dispatchEvent(new f.dom.window.CompositionEvent('compositionstart', { bubbles: true }))
-    timers.advance(60000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    timers.advance(180000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
     draft.dispatchEvent(new f.dom.window.CompositionEvent('compositionend', { bubbles: true }))
-    timers.advance(29999); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
+    timers.advance(89999); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
     timers.advance(1); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), true)
     f.exit(); await settle(); assert.equal(timers.count, 0)
-    f.enter(); await settle(); timers.advance(29000)
+    f.enter(); await settle(); timers.advance(89000)
     dispose(); assert.equal(timers.count, 0)
     const off = install(f.document, { compactIdleSeconds: 0 })
     timers.advance(120000); assert.equal(f.chat.hasAttribute('data-dsh-chat-hidden'), false)
