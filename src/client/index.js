@@ -130,7 +130,8 @@ export function installFullView(doc, input = {}, activity = null) {
   // Treat its own controls as a companion window even before the dialog is visible.
   const withinExplanation = node => node instanceof win.Element && Boolean(node.closest('.dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel'))
   const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
-  const popupOpen = () => [...doc.querySelectorAll(popupSelector)].some(node => {
+  const popupOpen = ({ ignoreExplanation = false } = {}) => [...doc.querySelectorAll(popupSelector)].some(node => {
+    if (ignoreExplanation && node.closest('.dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history')) return false
     if (node.matches(pendingSelector) && surface?.chat.contains(node) && !belongsToConversation(node)) return false
     if (node.closest('[hidden], [inert], [aria-hidden="true"]')) return false
     const css = win.getComputedStyle(node)
@@ -660,7 +661,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const keydown = event => {
     if (!surface || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return
     if (drag) { event.preventDefault(); event.stopPropagation(); finishPointer(null, true); return }
-    if (mode !== 'expanded' || approvalState || popupOpen() || !withinChat(event.target)) return
+    if (mode !== 'expanded' || approvalState || !withinChat(event.target) || popupOpen({ ignoreExplanation: true })) return
     event.preventDefault(); event.stopPropagation()
     setMode('compact', { focus: true })
   }

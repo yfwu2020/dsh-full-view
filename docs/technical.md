@@ -28,7 +28,9 @@ macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inli
 
 小窗层级为 50，在原工作面板之上、DockKit 原有浮窗层级 60 之下。完整视图中，frame 的直接子节点 `[data-shell-overlay]` 层级提升为 70：宿主共享浮层原先为 20，全屏 dock 升到 40 后会盖住共享浮层内的其他插件，无论其子按钮的 z-index 多高。覆盖只改变共享父层层级，不移动其他插件节点，也不改变 pointer-events；返回分栏或卸载恢复宿主 20。宿主菜单及审批弹窗仍由宿主管理，尚未完成所有弹窗组合的交互验证。
 
-完整视图仅以 CSS 隐藏官方 overlay 内 `.dsh-sel-layer .dsh-sel-pill`（胶囊及其球形态），使用 `!important` 覆盖解读插件动态设置的内联 display，不改写节点或持久状态。划词 / 引用 `.dsh-sel-btn` 和 `.dsh-sel-panel` 保持显示。外部点击收起聊天的捕获阶段显式排除这些入口和面板后代：入口点击发生时解读 dialog 尚未显示，不能仅依赖 `popupOpen()`。解读面板内 iframe 导致的 window blur 同样排除；普通工作区点击仍遵循原收起规则。退出 / 卸载通过清理自有标记或样式恢复胶囊，解读插件本身无需修改。
+完整视图仅以 CSS 隐藏官方 overlay 内 `.dsh-sel-layer .dsh-sel-pill`（胶囊及其球形态），使用 `!important` 覆盖解读插件动态设置的内联 display，不改写节点或持久状态。划词 / 引用 `.dsh-sel-btn` 和 `.dsh-sel-panel` 保持显示。外部点击收起聊天的捕获阶段显式排除这些入口和面板后代：入口点击发生时解读 dialog 尚未显示，不能仅依赖 `popupOpen()`。解读面板内 iframe 导致的 window blur 同样排除；普通工作区点击仍遵循原收起规则。退出 / 卸载通过清理自有标记或样式恢复胶囊，这部分浮层及鼠标交互无需修改解读插件。
+
+Esc 共存逻辑需要两端配合：解读插件在检测到 `[data-dsh-full-view]` 时，仅在事件目标属于解读 panel 或同级 historyList 时消费 Esc，保留内部菜单 / 设置 / 语音逐层退出；普通分栏仍使用它原来的全局 Esc。完整视图的聊天 Esc 仍要求事件目标在原聊天内，但调用 popupOpen({ignoreExplanation:true})，忽略解读面板及历史的弹窗标记，保留其他原生菜单、审批及输入法保护。两端都不修改另一个插件的事件监听或节点；退出完整视图后不再应用这个共存范围。
 
 标题栏增加 `[data-dsh-pin-chat]` 图钉 toggle，统一使用 26px 点击区域和 15px 图标，`aria-pressed` 表达固定状态；选中后使用主题色及淡色背景，不加悬停 title。默认不固定，只阻止 expanded 的 outsidePointer 和外部 iframe windowBlur 自动收起，不阻止网页获得焦点、不拦截网页事件。显式「−」、外缘、Esc、返回分栏保持原行为；手动隐藏再恢复保留本会话固定，退出 / 卸载或切换会话清除固定，不持久化到部署配置。
 

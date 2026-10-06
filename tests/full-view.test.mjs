@@ -126,6 +126,36 @@ test('打开解读及操作解读内容保持聊天展开，普通工作区点�
   } finally { dispose(); f.dom.window.close() }
 })
 
+test('共存小窗的 Esc 跟随焦点，聊天收起保留解读及其菜单，原生菜单与输入法继续保护', async () => {
+  const f = composerFixture(); const dispose = install(f.document)
+  const overlay = f.document.querySelector('[data-shell-overlay]')
+  overlay.innerHTML = '<div class="dsh-sel-layer"><div class="dsh-sel-panel" role="dialog" style="display:flex"><input><div role="listbox">解读模型菜单</div></div></div>'
+  const panel = overlay.querySelector('.dsh-sel-panel'), input = panel.querySelector('input')
+  const explanationEscape = event => {
+    if (event.key !== 'Escape' || !panel.contains(event.target)) return
+    event.preventDefault(); event.stopPropagation(); panel.style.display = 'none'
+  }
+  f.document.addEventListener('keydown', explanationEscape, true)
+  const esc = (node, options = {}) => node.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...options }))
+  try {
+    f.enter(); await settle(); f.document.querySelector('[data-dsh-full-view-edge]').click()
+    const draft = f.document.getElementById('draft'), saved = draft.textContent
+    draft.focus(); esc(draft, { isComposing: true })
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false)
+    const menu = f.document.createElement('div'); menu.setAttribute('role', 'listbox'); f.chat.append(menu)
+    esc(draft)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '聊天自己的菜单仍优先处理 Esc')
+    menu.remove(); esc(draft)
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), true, '解读小窗及其菜单不拦住聊天自己的 Esc')
+    assert.equal(panel.style.display, 'flex')
+    assert.equal(draft.textContent, saved)
+    f.document.querySelector('[data-dsh-full-view-edge]').click()
+    input.focus(); esc(input)
+    assert.equal(panel.style.display, 'none')
+    assert.equal(f.chat.hasAttribute('data-dsh-chat-minimized'), false, '关闭解读不连带收起聊天')
+  } finally { f.document.removeEventListener('keydown', explanationEscape, true); dispose(); f.dom.window.close() }
+})
+
 test('macOS 完整视图标签栏按侧栏状态避让窗口按钮，原生全屏及分栏保持宿主间距', async () => {
   const f = composerFixture()
   f.document.documentElement.setAttribute('data-platform', 'darwin')
