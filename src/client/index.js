@@ -126,7 +126,6 @@ export function installFullView(doc, input = {}, activity = null) {
     } finally { returningFocus = false }
   }
   const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
-  const eventWithinChat = event => withinChat(event.target) || !!surface?.chat && event.composedPath?.().includes(surface.chat)
   // The selection button opens its dialog after our capture-phase pointer handler.
   // Treat its own controls as a companion window even before the dialog is visible.
   const withinExplanation = node => node instanceof win.Element && Boolean(node.closest('.dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel'))
@@ -662,8 +661,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const keydown = event => {
     if (!surface || event.key !== 'Escape' || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return
     if (drag) { event.preventDefault(); event.stopPropagation(); finishPointer(null, true); return }
-    const chatFocused = eventWithinChat(event)
-    if (mode !== 'expanded' || approvalState || popupOpen({ ignoreExplanation: chatFocused })) return
+    if (mode !== 'expanded' || approvalState || popupOpen({ ignoreExplanation: withinChat(event.target) })) return
     event.preventDefault(); event.stopPropagation()
     setMode('compact', { focus: true })
   }
