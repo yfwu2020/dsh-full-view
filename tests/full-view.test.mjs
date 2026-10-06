@@ -53,6 +53,31 @@ function displayed(element, win) {
   return true
 }
 
+test('完整视图的共享浮层高于工作面板和聊天小窗，退出恢复宿主层级及鼠标穿透', async () => {
+  const f = composerFixture()
+  const overlay = f.document.querySelector('[data-shell-overlay]')
+  const host = f.document.createElement('style')
+  host.textContent = '[data-shell-overlay] { position: absolute; inset: 0; z-index: 20; pointer-events: none; } [data-shell-overlay] > * { pointer-events: auto; }'
+  f.document.head.append(host)
+  const mount = f.document.createElement('div'); mount.style.pointerEvents = 'none'
+  const button = f.document.createElement('button'); button.style.pointerEvents = 'auto'; button.style.zIndex = '2147483000'
+  mount.append(button); overlay.append(mount)
+  const dispose = install(f.document)
+  const css = node => f.dom.window.getComputedStyle(node)
+  try {
+    f.enter(); await settle()
+    assert.ok(Number(css(overlay).zIndex) > 60, '共享浮层需要越过全屏面板 40、聊天 50 和 DockKit 浮窗 60')
+    assert.equal(css(overlay).pointerEvents, 'none')
+    assert.equal(css(mount).pointerEvents, 'none')
+    assert.equal(css(button).pointerEvents, 'auto')
+    f.exit(); await settle()
+    assert.equal(css(overlay).zIndex, '20')
+    assert.equal(button.parentElement, mount)
+    f.enter(); await settle(); dispose()
+    assert.equal(css(overlay).zIndex, '20')
+  } finally { dispose(); f.dom.window.close() }
+})
+
 test('macOS 完整视图标签栏释放宿主窗口控件留白，分栏和浮动面板保持原间距', async () => {
   const f = composerFixture()
   f.document.documentElement.setAttribute('data-platform', 'darwin')

@@ -1,3 +1,11 @@
+## 划词解读共享浮层兼容 · main 未发布 · 2026-10-06
+
+`npm run check`：64 项检查全部通过。读取本机 Layout 与 SidebarRight 样式，以及用户的 dsh-selection-explain 0.9.0 客户端：解读球和按钮位于官方 shell.overlay，父层 z-index 为 20；宿主全屏 dock 升到 40，插件聊天为 50、DockKit 浮窗为 60，解读子按钮的 2147483000 无法跨越父层上下文。仅在本插件完整视图中将共享父层改为 70。
+
+新增回归检查先在原层级失败，再确认完整视图共享浮层越过各面板，原 pointer-events 穿透及按钮交互保持，返回分栏和卸载恢复 20。独立预览同步加载两个真实客户端 bundle，使用模拟宿主槽和本地 API 返回值，不发送真实解读任务：对照层级 20 时，解读按钮 display:flex 却被 DIV 盖住，球被 IFRAME 盖住；层级 70 时，两者中心的 elementFromPoint 命中各自节点。沙箱 srcdoc 网页原桥正常报告选区并显示解读入口，网页表单可继续输入且值保留。
+
+本轮未修改 dsh-selection-explain，未操作 Harness 窗口；宿主实际验收由用户完成。版本保持 0.1.4，只提交与推送，不发布新版本。
+
 ## macOS 首列标签栏多余留白 · main 未发布 · 2026-10-06
 
 `npm run check`：63 项检查全部通过。静态读取本机 Harness SidebarRight 样式，首列全屏 dock 在 macOS 普通窗口中预留 88px，系统全屏为 10px。宿主规则优先级高于插件原先的 10px 覆盖，导致工作区内仍保留窗口控件留白。修正现有变量覆盖的优先级，仅作用于插件完整视图中的全屏首列 dock。

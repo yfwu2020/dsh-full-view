@@ -2,6 +2,9 @@
 const brainGlyph = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5c-1.2-2.7-5-2.6-6.2.5C3 5.5 2 8.2 3.2 10.3c-2.2 2.6-1.2 6.2 1.6 7.1-.1 3.7 4.8 5.3 7.2 2.6 2.4 2.7 7.3 1.1 7.2-2.6 2.8-.9 3.8-4.5 1.6-7.1 1.2-2.1.2-4.8-2.6-4.8C17 2.4 13.2 2.3 12 5Z M12 5v15 M5.8 5.5c-.5 1.7.2 3.3 1.8 4 M18.2 5.5c.5 1.7-.2 3.3-1.8 4 M3.2 10.3c1.6-.8 3.2-.2 4.2 1.3 M20.8 10.3c-1.6-.8-3.2-.2-4.2 1.3 M4.8 17.4c1.9.4 3.5-.6 3.6-2.3 M19.2 17.4c-1.9.4-3.5-.6-3.6-2.3"/></svg>')
 export const style = `
 [data-dsh-full-view] > [data-rightbar-col] { grid-column: 3; }
+/* Keep official shell.overlay entries above fullscreen dock (40), chat (50), and DockKit floats (60).
+   Raising a plugin's child z-index cannot escape the host overlay's original stacking context (20). */
+[data-dsh-full-view] > [data-shell-overlay] { z-index: 70; }
 [data-dsh-full-view] [data-sidebar-right-panel="fullscreen"][data-sidebar-right-open] {
   width: var(--dsh-fv-content-width) !important;
   max-width: var(--dsh-fv-content-width) !important;
