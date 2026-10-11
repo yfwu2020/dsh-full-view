@@ -33,6 +33,8 @@ export function installFullView(doc, input = {}, activity = null) {
   const morph = createWhaleMorph(win)
   win[cleanupKey]?.()
   const sheet = doc.createElement('style')
+  // Harness claims unowned styles for whichever plugin materializes next.
+  sheet.setAttribute('data-plugin', '@yfwu2020/dsh-full-view')
   sheet.setAttribute('data-dsh-full-view-style', '')
   sheet.textContent = style
   doc.head.append(sheet)
@@ -616,6 +618,8 @@ export function installFullView(doc, input = {}, activity = null) {
   const sync = () => {
     raf = null
     if (disposed) return
+    // Reuse our own sheet if removed; never reinstall effects or touch other styles.
+    if (sheet.parentElement !== doc.head) doc.head.append(sheet)
     const next = findSurface(doc)
     if (!next || next.chat !== surface?.chat || next.panel !== surface?.panel) {
       restore()

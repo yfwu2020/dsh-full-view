@@ -33,6 +33,80 @@ function fixture() {
 
 const settle = async () => { await new Promise(resolve => setTimeout(resolve, 40)) }
 
+test('样式不被后加载的插件认领，其热重载不影响完整视图', async () => {
+  const f = fixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const sheet = f.document.querySelector('[data-dsh-full-view-style]')
+    const foreign = f.document.createElement('style')
+    foreign.textContent = '.other-plugin { color: red; }'
+    f.document.head.append(foreign)
+    // Harness claimStyles / removeOwnedStyles use these selectors during HMR.
+    for (const el of f.document.querySelectorAll('style:not([data-plugin])')) el.setAttribute('data-plugin', '@example/other-plugin')
+    for (const el of f.document.querySelectorAll('style[data-plugin]')) if (el.getAttribute('data-plugin') === '@example/other-plugin') el.remove()
+    assert.equal(sheet.isConnected, true, '其他插件的清理不得移除完整视图样式')
+    assert.equal(sheet.getAttribute('data-plugin'), '@yfwu2020/dsh-full-view')
+    await settle()
+    assert.equal(f.document.querySelectorAll('[data-dsh-full-view-style]').length, 1)
+    assert.equal(f.dom.window.getComputedStyle(f.chat).position, 'absolute')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('样式被移除后恢复原样式，保留浮窗形态、草稿和其他插件样式', async () => {
+  const f = fixture(); const dispose = install(f.document)
+  try {
+    f.enter(); await settle()
+    const sheet = f.document.querySelector('[data-dsh-full-view-style]')
+    const toolbar = f.document.querySelector('[data-dsh-full-view-toolbar]')
+    const draft = f.document.getElementById('draft')
+    const foreign = f.document.createElement('style')
+    foreign.setAttribute('data-plugin', '@example/other-plugin')
+    foreign.textContent = '.other-plugin { color: red; }'
+    f.document.head.append(foreign)
+    for (let i = 0; i < 2; i++) {
+      sheet.remove(); await settle()
+      assert.equal(sheet.parentElement, f.document.head, '监听后应补回被删除的样式')
+      assert.equal(f.document.querySelectorAll('[data-dsh-full-view-style]').length, 1)
+      assert.equal(f.dom.window.getComputedStyle(f.chat).position, 'absolute')
+      assert.equal(f.document.querySelector('[data-dsh-full-view-toolbar]'), toolbar)
+      assert.equal(f.document.getElementById('draft'), draft)
+      assert.equal(draft.value, '正在编辑的草稿')
+      assert.equal(foreign.isConnected, true)
+      assert.equal(foreign.getAttribute('data-plugin'), '@example/other-plugin')
+    }
+    dispose(); await settle()
+    assert.equal(f.document.querySelector('[data-dsh-full-view-style]'), null, '卸载后不得复活样式')
+    assert.equal(foreign.isConnected, true, '卸载只清理自己的样式')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('分栏中样式丢失也会恢复，下次进入完整视图可用', async () => {
+  const f = fixture(); const dispose = install(f.document)
+  try {
+    f.document.querySelector('[data-dsh-full-view-style]').remove()
+    await settle()
+    assert.equal(f.document.querySelectorAll('[data-dsh-full-view-style]').length, 1)
+    f.enter(); await settle()
+    assert.equal(f.dom.window.getComputedStyle(f.chat).position, 'absolute')
+  } finally { dispose(); f.dom.window.close() }
+})
+
+test('本插件重装和旧清理回调不会留下重复样式或删除新样式', async () => {
+  const f = fixture(); const first = install(f.document)
+  const oldSheet = f.document.querySelector('[data-dsh-full-view-style]')
+  oldSheet.remove()
+  const second = install(f.document)
+  try {
+    first(); await settle()
+    const sheets = f.document.querySelectorAll('[data-dsh-full-view-style]')
+    assert.equal(oldSheet.isConnected, false)
+    assert.equal(sheets.length, 1)
+    assert.equal(sheets[0].getAttribute('data-plugin'), '@yfwu2020/dsh-full-view')
+    second(); await settle()
+    assert.equal(f.document.querySelector('[data-dsh-full-view-style]'), null)
+  } finally { first(); second(); f.dom.window.close() }
+})
+
 function composerFixture() {
   const f = fixture()
   f.chat.innerHTML = `<div data-slot="main.conversation"><div data-conversation-content data-conversation-session="s1"><div data-conversation-scroll>
