@@ -130,7 +130,8 @@ export function installFullView(doc, input = {}, activity = null) {
   const withinChat = node => node instanceof win.Node && surface?.chat.contains(node)
   // The selection button opens its dialog after our capture-phase pointer handler.
   // Treat its own controls as a companion window even before the dialog is visible.
-  const withinExplanation = node => node instanceof win.Element && Boolean(node.closest('.dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history'))
+  const explanationOwner = '[data-dsh-floating-owner="explanation"]'
+  const withinExplanation = node => node instanceof win.Element && Boolean(node.closest(`${explanationOwner}, .dsh-sel-layer .dsh-sel-btn, .dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history`))
   const setActiveWindow = owner => surface?.frame.setAttribute('data-dsh-active-floating-window', owner)
   const recordActiveWindow = event => {
     if (!surface || returningFocus) return
@@ -142,7 +143,7 @@ export function installFullView(doc, input = {}, activity = null) {
   const activeWindowKey = event => { if (event.key !== 'Escape') recordActiveWindow(event) }
   const popupSelector = '[role="dialog"], [role="menu"], [role="listbox"], [data-trigger-menu], [data-overlay-owner], [data-content-search-bar], [data-approval-key], [data-question-key], [data-plan-review-key]'
   const popupOpen = ({ ignoreExplanation = false } = {}) => [...doc.querySelectorAll(popupSelector)].some(node => {
-    if (ignoreExplanation && node.closest('.dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history')) return false
+    if (ignoreExplanation && node.closest(`${explanationOwner}, .dsh-sel-layer .dsh-sel-panel, .dsh-sel-layer .dsh-sel-history`)) return false
     if (node.matches(pendingSelector) && surface?.chat.contains(node) && !belongsToConversation(node)) return false
     if (node.closest('[hidden], [inert], [aria-hidden="true"]')) return false
     const css = win.getComputedStyle(node)

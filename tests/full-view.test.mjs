@@ -127,7 +127,7 @@ function displayed(element, win) {
   return true
 }
 
-test('完整视图的共享浮层高于工作面板和聊天小窗，退出恢复宿主层级及鼠标穿透', async () => {
+test('完整视图保持宿主公共浮层的层级及鼠标穿透，不抬高其他插件', async () => {
   const f = composerFixture()
   const overlay = f.document.querySelector('[data-shell-overlay]')
   const host = f.document.createElement('style')
@@ -140,7 +140,7 @@ test('完整视图的共享浮层高于工作面板和聊天小窗，退出恢�
   const css = node => f.dom.window.getComputedStyle(node)
   try {
     f.enter(); await settle()
-    assert.ok(Number(css(overlay).zIndex) > 60, '共享浮层需要越过全屏面板 40、聊天 50 和 DockKit 浮窗 60')
+    assert.equal(css(overlay).zIndex, '20', '公共父层继续由宿主管理')
     assert.equal(css(overlay).pointerEvents, 'none')
     assert.equal(css(mount).pointerEvents, 'none')
     assert.equal(css(button).pointerEvents, 'auto')
@@ -152,7 +152,7 @@ test('完整视图的共享浮层高于工作面板和聊天小窗，退出恢�
   } finally { dispose(); f.dom.window.close() }
 })
 
-test('完整视图隐藏解读胶囊及球，保留划词入口和面板，退出及卸载恢复', async () => {
+test('完整视图不改写解读插件自身的胶囊、入口和面板显示', async () => {
   const f = composerFixture()
   const overlay = f.document.querySelector('[data-shell-overlay]')
   overlay.innerHTML = '<div class="dsh-sel-layer"><div class="dsh-sel-pill" style="display:flex">解读胶囊</div><button class="dsh-sel-btn">解读</button><div class="dsh-sel-panel" role="dialog" style="display:flex">正文</div></div><button id="other-plugin">其他插件</button>'
@@ -160,9 +160,9 @@ test('完整视图隐藏解读胶囊及球，保留划词入口和面板，退�
   const dispose = install(f.document)
   try {
     f.enter(); await settle()
-    assert.equal(displayed(pill, f.dom.window), false)
+    assert.equal(displayed(pill, f.dom.window), true)
     pill.setAttribute('data-ball', '1'); await settle()
-    assert.equal(displayed(pill, f.dom.window), false, '同一胶囊收成球后也隐藏')
+    assert.equal(displayed(pill, f.dom.window), true, '胶囊形态与显示由解读插件自身管理')
     for (const selector of ['.dsh-sel-btn', '.dsh-sel-panel', '#other-plugin']) assert.equal(displayed(overlay.querySelector(selector), f.dom.window), true)
     assert.equal(pill.style.display, 'flex', '不改写另一个插件的内联状态')
     f.exit(); await settle()

@@ -26,9 +26,11 @@ macOS 宿主首列全屏标签栏为窗口控件预留 `--dsh-dockkit-strip-inli
 
 宿主更改上述标记或相邻结构时，需要更新适配器。目前针对 layout / sidebar-right 0.2.0-rc.2 验证；未支持旧源码中的 details 布局。
 
-小窗层级为 50，在原工作面板之上、DockKit 原有浮窗层级 60 之下。完整视图中，frame 的直接子节点 `[data-shell-overlay]` 层级提升为 70：宿主共享浮层原先为 20，全屏 dock 升到 40 后会盖住共享浮层内的其他插件，无论其子按钮的 z-index 多高。覆盖只改变共享父层层级，不移动其他插件节点，也不改变 pointer-events；返回分栏或卸载恢复宿主 20。宿主菜单及审批弹窗仍由宿主管理，尚未完成所有弹窗组合的交互验证。
+小窗层级为 50，在原工作面板之上、DockKit 原有浮窗层级 60 之下。宿主 `[data-shell-overlay]` 保持原层级 20，本插件不再整体抬高公共父层。`dsh-selection-explain` 在 body 管理自己的 fixed 根，层级 70、空白区域 pointer-events:none；其子窗口与按钮仍由该插件管理。`dsh-recent-sessions` 的 body 浮层为 19，低于公共父层与解读根。宿主模型菜单自身 portal 到 body、层级 1100，继续高于这些插件界面；未声称所有宿主弹窗组合均已验证。
 
-完整视图仅以 CSS 隐藏官方 overlay 内 `.dsh-sel-layer .dsh-sel-pill`（胶囊及其球形态），使用 `!important` 覆盖解读插件动态设置的内联 display，不改写节点或持久状态。划词 / 引用 `.dsh-sel-btn` 和 `.dsh-sel-panel` 保持显示。外部点击收起聊天的捕获阶段显式排除这些入口和面板后代：入口点击发生时解读 dialog 尚未显示，不能仅依赖 `popupOpen()`。解读面板内 iframe 导致的 window blur 同样排除；普通工作区点击仍遵循原收起规则。退出 / 卸载通过清理自有标记或样式恢复胶囊，这部分浮层及鼠标交互无需修改解读插件。
+完整视图只公布自有 frame 的 `data-dsh-full-view` 状态，不再通过 CSS 控制解读胶囊。解读观察该状态并在自己的根上设置 `data-full-view`，由自己的样式隐藏胶囊；退出或完整视图卸载后自行恢复。解读根公开 `data-dsh-floating-owner="explanation"`，聊天通过该归属识别解读的入口、面板、历史、语音卡及内部控件，保留旧版本 `.dsh-sel-*` 选择器兼容。点击解读或其 iframe 不收起聊天；普通工作区点击仍遵循原收起规则。两个插件各自创建与清理自己的节点，解读槽的稳定 ref 在卸载时摘除自有根、重新挂载时复用原节点。
+
+跨仓库验证（先构建三个相邻仓库）：`node scripts/test-plugin-layers.mjs` 执行实际客户端的独立 DOM 集成；`node scripts/smoke-plugin-layers.mjs` 在 Chrome 中检查实际层叠与命中、空白穿透、全屏往返、连续 Esc 和卸载。后者最近会话采用真实构建 CSS 与列表结构夹具，宿主菜单采用已核对的 1100 层级；仅模拟数据与模块 / 槽服务，不连接真实 Harness。无头虚拟时钟用 timer 推进 rAF 调度，此检查不验证动画时序。
 
 Esc 共存通过完整视图自有 frame 上的 `data-dsh-active-floating-window` 协作，值为 chat / explanation / none。完整视图捕获 pointerdown，记录最后点击的窗口；focusin 与非 Esc 键盘操作支持 Tab 和继续输入，标题、消息、空白及解读同级 historyList 都属于窗口。点击两窗外或聚焦外部 iframe 清为 none；宿主 portal 菜单保留打开它的窗口。Esc 本身不更新活动归属，不用事件目标反推用户最后点击。聊天收起 / 隐藏、换会话清为 none，程序归还编辑焦点不重新激活；退出 / 卸载删除标记和监听。解读在捕获阶段读取活动标记，活动聊天仍展开时将 Esc 留给聊天，否则退出自己的一层并阻止同一次事件继续传播。聊天在冒泡阶段依照活动标记决定是否忽略解读弹窗，保留其他菜单、输入法和审批保护。两端不移动对方节点或拦改对方监听，普通分栏保留解读原全局 Esc；未升级的完整视图没有活动标记时解读兼容旧键盘焦点判断。
 
