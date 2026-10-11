@@ -102,10 +102,10 @@
    @yfwu2020/dsh-full-view
    ```
 
-   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.5`。也可以使用 GitHub 上的 0.1.5 安装包地址：
+   需要固定版本时填写 `@yfwu2020/dsh-full-view@0.1.6`。也可以使用 GitHub 上的 0.1.6 安装包地址：
 
    ```text
-   https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.5/yfwu2020-dsh-full-view-0.1.5.tgz
+   https://github.com/yfwu2020/dsh-full-view/releases/download/v0.1.6/yfwu2020-dsh-full-view-0.1.6.tgz
    ```
 
 3. 在已安装列表中找到 **`@yfwu2020/dsh-full-view`**，打开开关。
@@ -118,7 +118,7 @@
 也可以在「添加插件」中填写指定版本的源码地址：
 
 ```text
-github:yfwu2020/dsh-full-view#v0.1.5
+github:yfwu2020/dsh-full-view#v0.1.6
 ```
 
 仓库和安装包都带有构建好的插件文件，使用者不需要自行编译。如果 GitHub 直链无法访问，可以先从 [Releases](https://github.com/yfwu2020/dsh-full-view/releases/latest) 下载 `.tgz`，解压后在「添加插件」中填写包含插件 `package.json` 的目录绝对路径。
@@ -225,6 +225,13 @@ node scripts/install-local.mjs desktop
 请在 [Issues](https://github.com/yfwu2020/dsh-full-view/issues) 中说明系统、Harness 版本、是否已开启右侧全屏、复现步骤，并附上能说明布局问题的截图。截图前请遮盖私人会话和敏感内容。
 
 ## 更新记录
+
+### 0.1.6：插件浮层共存与样式恢复
+
+- 完整视图保留 Harness 公共浮层原来的顺序，解读小窗使用解读插件自己的浮层；最近会话列表保持在解读下面。
+- 完整视图不再直接隐藏其他插件的胶囊，由解读插件自行处理完整视图中的隐藏与恢复。请同时升级划词解读到 **0.10.2**、最近会话到 **0.2.3**。
+- 样式表明确归属本插件，避免其他插件重载时被误删；意外丢失时自动恢复，卸载后正常清理。
+- 保留聊天与解读同时打开、最后操作小窗优先响应 Esc 的交互。
 
 ### 0.1.5：自动回收与标题拖动
 

@@ -52,7 +52,7 @@ Esc 共存通过完整视图自有 frame 上的 `data-dsh-active-floating-window
 
 宿主替换输入框节点时重新附加标记，退出或卸载删除全部临时标记。未提供上述输入区标记的宿主回退到原有标题栏收起方式。
 
-## main 分支新增适配（尚未发布）
+## 0.1.6 适配说明
 
 交互采用紧凑、展开、隐藏三种状态，操作栏显示与消息区展开是两个独立条件。鲸鱼恢复入口附着在工作区，避免被原聊天的 inert 隔离。缩放与移动共用受约束的几何计算；鼠标取消恢复起始偏好，视口变化只限制呈现，不写回偏好。
 
@@ -66,7 +66,7 @@ Esc 共存通过完整视图自有 frame 上的 `data-dsh-active-floating-window
 
 具体行为、参考依据和无法现场验证的边界见 [交互设计说明](interaction-design.md)。
 
-## 运行状态与鲸鱼入口（main，尚未发布）
+## 运行状态与鲸鱼入口（0.1.6）
 
 读取 `uiSession.sessionStatus` 的当前会话 running / pendingInteraction，借用 `sessions.binding(id)`，不延长会话生命周期。订阅该 binding 的 session 与 eventSource，取最后一个 `turn/start` 的 event.time；已有匹配 `turn/end` 的旧回合不能成为下一回合的计时起点。缺失起始记录时显示“处理中…”。
 
@@ -74,7 +74,7 @@ Esc 共存通过完整视图自有 frame 上的 `data-dsh-active-floating-window
 
 40px 圆形恢复按钮只显示 Harness 原生鲸鱼尾巴，无可见文字及悬停标题，辅助名称保留“恢复聊天”。运行时读取已安装宿主 `ChatView.module.css` 样式中的 APNG mask，直接使用原生动画；静止时使用宿主 RunningWhaleTail 的原生 SVG fallback 路径（ui-chat 0.2.0-rc.2，viewBox 16×16、strokeWidth 1），保持 24px 图标尺寸，由浏览器按屏幕像素密度渲染矢量轮廓。原路径及 DeepSeek 的 MIT 许可保留于 whale.js，构建产物也保留许可。运行 APNG 为 28×28 位图，按宿主原生 14px 图标尺寸显示，避免在 2x 屏幕中再次放大到 48px。遵从 prefers-reduced-motion 和 forced-colors，恢复和拖动继续使用原交互。动画仍直接读取宿主样式，不随插件打包；静止路径来源明确固定于已验证的宿主版本，宿主更新图案时需同步适配。
 
-## 聚焦展开、隐藏统计与形态过渡（main，尚未发布）
+## 聚焦展开、隐藏统计与形态过渡（0.1.6）
 
 `data-dsh-full-view-input-footer` 在整个浮窗状态下隐藏，退出或卸载后标记移除，普通分栏的原统计恢复。聚焦或点击当前顶层会话的原编辑器直接展开；原生菜单和输入法仍由现有保护逻辑处理。隐藏入口恢复时直接进入 expanded。
 
